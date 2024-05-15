@@ -1,0 +1,881 @@
+\documentclass[lang=cn,newtx,10pt,scheme=chinese]{elegantbook}
+\usepackage{realboxes}
+\usepackage{forest}
+\usepackage{import}
+
+\title{Linux设备驱动开发教程}
+\author{左元}
+
+\setcounter{tocdepth}{3}
+
+\cover{cover.pdf}
+
+% 本文档命令
+\usepackage{array}
+\newcommand{\ccr}[1]{\makecell{{\color{#1}\rule{1cm}{1cm}}}}
+
+% 修改标题页的橙色带
+\definecolor{customcolor}{RGB}{32,178,170}
+\colorlet{coverlinecolor}{customcolor}
+\usepackage{cprotect}
+
+\newtcolorbox{marker}[1][]{enhanced,
+  before skip=2mm,after skip=3mm,
+  boxrule=0.4pt,left=5mm,right=2mm,top=1mm,bottom=1mm,
+  colback=yellow!50,
+  colframe=yellow!20!black,
+  sharp corners,rounded corners=southeast,arc is angular,arc=3mm,
+  underlay={%
+    \path[fill=tcbcolback!80!black] ([yshift=3mm]interior.south east)--++(-0.4,-0.1)--++(0.1,-0.2);
+    \path[draw=tcbcolframe,shorten <=-0.05mm,shorten >=-0.05mm] ([yshift=3mm]interior.south east)--++(-0.4,-0.1)--++(0.1,-0.2);
+    \path[fill=yellow!50!black,draw=none] (interior.south west) rectangle node[white]{\Huge\bfseries !} ([xshift=4mm]interior.north west);
+    },
+  drop fuzzy shadow,#1}
+
+\tcbuselibrary{listings, skins, breakable}
+\usepackage[T1]{fontenc}
+\usepackage[ttdefault=true]{AnonymousPro}
+\definecolor{pblue}{rgb}{0.13,0.13,1}
+\definecolor{pgreen}{rgb}{0,0.5,0}
+
+\newtcblisting[auto counter, number within=chapter]{mycode}[1]{
+    breakable,
+    enhanced,
+    attach boxed title to top right={yshift=-\tcboxedtitleheight},
+    boxed title style={
+        size=small,colback=gray!50,
+        colframe=gray!50,
+        sharp corners=downhill,
+        arc=.5cm,
+        top=1mm,bottom=1mm,left=1mm,right=1mm
+    },
+    fonttitle=\color{black}\itshape\ttfamily,
+    colframe=gray!20,
+    top=\tcboxedtitleheight,
+    bottom=\tcboxedtitleheight,
+    sharp corners=downhill,
+    arc=.5cm,
+    title={#1},
+    listing only,
+    listing options={
+        escapeinside={(*@}{@*)},
+        language=c,
+        basicstyle=\fontfamily{AnonymousPro}\selectfont,
+        keywordstyle=\bfseries\color{pblue},
+        stringstyle=\bfseries\itshape\color{green!40!black},
+        commentstyle=\bfseries\itshape\color{black!60},
+        % Line numbers
+        xleftmargin={0.75cm},
+        numbers=left,
+        stepnumber=1,
+        firstnumber=1,
+        numberfirstline=true,
+        showspaces=false,
+        showtabs=false,
+        breaklines=true,
+        showstringspaces=false,
+        tabsize=1,
+        emph={
+            gpio_config_t, for, uint8_t, TextView, Toast, Button, EditText, ImageView, Typeface, Intent, WebView, WebSettings, SwipeRefreshLayout, RelativeLayout, Animation, AlertDialog, SharedPreferences, Editor, ToggleButton, CardView, LinearLayout, gradient, shape,
+        },
+        emphstyle={\bfseries\color{pblue}},
+        frame=l
+    }
+}
+
+\begin{document}
+
+\maketitle
+\frontmatter
+
+\tableofcontents
+
+\mainmatter
+
+\chapter{简介}
+
+Linux内核是一种复杂、轻便、模块化并被广泛使用的软件。大约80\%的服务器和全世界一半以上设备的嵌入式系统上运行着Linux内核。设备驱动程序在整个Linux系统中起着至关重要的作用。由于Linux已成为非常流行的操作系统。
+
+设备驱动程序通过内核在用户空间和设备之间建立连接。
+
+Linux起源于芬兰的莱纳斯·托瓦尔兹（Linus Torvalds）在1991年凭个人爱好开创的一个项目。这个项目不断发展，至今全球有1000多名贡献者。现在，Linux已经成为嵌入式系统和服务器的必选。内核作为操作系统的核心，其开发不是一件容易的事。
+
+和其他操作系统相比，Linux拥有更多的优点。
+
+\begin{itemize}
+\item 免费。
+\item 丰富的文档和社区支持。
+\item 跨平台移植。
+\item 源代码开放。
+\item 许多免费的开源软件。
+\end{itemize}
+
+本教程尽可能做到通用，但是仍然有些特殊的模块，比如设备树，目前在x86上没有完整实现。那么话题将专门针对ARM处理器，以及所有完全支持设备树的处理器。为什么选这两种架构？因为它们在桌面和服务器（x86）以及嵌入式系统（ARM）上得到广泛应用。
+
+\section{环境配置}
+
+在 Ubuntu 下，安装如下包。
+
+\begin{mycode}{安装一些包}
+$ sudo apt-get update
+$ sudo apt-get install gawk wget git diffstat
+unzip texinfo \
+gcc-multilib build-essential chrpath socat
+libsdl1.2-dev \
+xterm ncurses-dev lzop
+\end{mycode}
+
+安装针对 ARM 体系结构的交叉编译器。
+
+\begin{mycode}{安装交叉编译器}
+$ sudo apt-get install gcc-arm-linux-gnueabihf
+\end{mycode}
+
+\subsection{获取源码}
+
+在早期内核（2003年前）中，使用奇偶数对版本进行编号：奇数是稳定版，偶数是不稳定版。随着2.6版本的发布，版本编号方案切换为X.Y.Z格式。
+
+\begin{itemize}
+\item X：代表实际的内核版本，也被称为主版本号，当有向后不兼容的API更改时，它会递增。
+\item Y：代表修订版本号，也被称作次版本号，在向后兼容的基础上增加新的功能后，它会递增。
+\item Z：代表补丁，表示与错误修订相关的版本。
+\end{itemize}
+
+这就是所谓的语义版本编号方案，这种方案一直持续到2.6.39版本；当Linus Torvalds决定将版本升级到3.0时，意味着语义版本编号在2011年正式结束，然后采用的是X.Y版本编号方案。
+
+升级到3.20版时，Linus认为不能再增加Y，决定改用随意版本编号方案：当Y值增加到手脚并用也数不过来时就递增X。这就是版本直接从3.20变化到4.0的原因。
+
+现在内核使用的X.Y随意版本编号方案，这与语义版本编号无关。
+
+\begin{marker}
+Linus：仁慈的独裁者。
+\end{marker}
+
+\textbf{源代码的组织}
+
+必须使用Linus Torvald的Github仓库。
+
+\begin{mycode}{下载源码}
+$ git clone https://github.com/torvalds/linux
+$ git checkout 版本号 # 例如：git checkout v4.1
+$ ls
+\end{mycode}
+
+内核中各文件夹的含义：
+
+\begin{itemize}
+    \item arch/：Linux内核是一个快速增长的工程，支持越来越多的体系结构。这意味着，内核尽可能通用。与体系结构相关的代码被分离出来，并放入此目录中。该目录包含与处理器相关的子目录，例如alpha/、arm/、mips/、blackfin/等。
+    \item block/：该目录包含块存储设备代码，实际上也就是I/O调度算法。
+    \item crypto/：该目录包含密码API和加密算法代码。
+    \item Documentation/：这应该是最受欢迎的目录。它包含不同内核框架和子系统所使用API的描述。在论坛发起提问之前，应该先看这里。
+    \item drivers/：这是最重的目录，不断增加的设备驱动程序都被合并到这个目录，不同的子目录中包含不同的设备驱动程序。
+    \item fs/：该目录包含内核支持的不同文件系统的实现，诸如NTFS、FAT、ETX\{2,3,4\}、sysfs、procfs、NFS等。
+    \item include/：该目录包含内核头文件。
+    \item init/：该目录包含初始化和启动代码。
+    \item ipc/：该目录包含进程间通信（IPC）机制的实现，如消息队列、信号量和共享内存。
+    \item kernel/：该目录包含基本内核中与体系结构无关的部分。
+    \item lib/：该目录包含库函数和一些辅助函数，分别是通用内核对象（kobject）处理程序和循环冗余码（CRC）计算函数等。
+    \item mm/：该目录包含内存管理相关代码。
+    \item net/：该目录包含网络（无论什么类型的网络）协议相关代码。
+    \item scripts/：该目录包含在内核开发过程中使用的脚本和工具，还有其他有用的工具。
+    \item security/：该目录包含安全框架相关代码。
+    \item sound/：该目录包含音频子系统代码。
+    \item usr/：该目录目前包含了initramfs的实现。
+\end{itemize}
+
+内核必须保持它的可移植性。任何体系结构特定的代码都应该位于arch目录中。当然，与用户空间API相关的内核代码不会改变（系统调用、/proc、/sys），因为它会破坏现有的程序。
+
+\subsection{内核配置}
+
+Linux内核是一个基于makefile的工程，有1000多个选项和驱动程序。配置内核可以使用基于ncurse的接口命令\Colorbox{lightgrey}{\lstinline{make menuconfig}}，也可以使用基于X的接口命令make xconfig。一旦选择，所有选项会被存储到源代码根目录下的\Colorbox{lightgrey}{\lstinline{.config}}文件中。
+
+大多情况下不需要从头开始配置。每个arch目录下面都有默认的配置文件可用，可以把它们用作配置起点：
+
+\begin{mycode}{列出配置文件}
+$ ls arch/<you_arch>/configs/
+\end{mycode}
+
+对于基于ARM的CPU，这些配置文件位于\Colorbox{lightgrey}{\lstinline{arch/arm/configs/}}；对于基于V3S处理器的Atguigu派，默认的配置文件位于\Colorbox{lightgrey}{\lstinline{arch/arm/configs/atguigupi_defconfig}}；类似地，对于x86处理器，可以在\Colorbox{lightgrey}{\lstinline{arch/x86/configs/}}找到配置文件，仅有两个默认配置文件：\Colorbox{lightgrey}{\lstinline{i386_defconfig}}和\Colorbox{lightgrey}{\lstinline{x86_64_defconfig}}，它们分别对应于32位和64位版本。
+
+对x86系统，内核配置非常简单：
+
+\begin{mycode}{内核配置}
+$ make x86_64_defconfig
+$ make zImage -j16
+$ make modules
+$ makeINSTALL_MOD_PATH </where/to/install>
+$ modules_install
+\end{mycode}
+
+对于基于V3S的开发板AtguiguPI：
+
+可以先执行\Colorbox{lightgrey}{\lstinline{ARCH=arm make atguigupi_defconfig}}，然后执行\Colorbox{lightgrey}{\lstinline{ARCH=arm make menuconfig}}。前一个命令把默认的内核选项存储到\Colorbox{lightgrey}{\lstinline{.config}}文件中；后一个命令则根据需求来更新、增加或者删除选项。
+
+\subsection{构建自己的内核}
+
+构建自己的内核需要指定相关的体系结构和编译器。
+
+\begin{mycode}{交叉编译}
+$ ARCH=arm make atguigupi_defconfig
+$ ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- make zImage -j16
+\end{mycode}
+
+内核构建完成后，会在\Colorbox{lightgrey}{\lstinline{arch/arm/boot/}}下生成一个单独的二进制映像文件。使用下列命令构建模块：
+
+\begin{mycode}{构建模块}
+$ ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- make modules
+\end{mycode}
+
+可以通过下列命令安装编译好的模块：
+
+\begin{mycode}{安装模块}
+$ ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- make modules_install
+\end{mycode}
+
+\Colorbox{lightgrey}{\lstinline{modules_install}}目标需要指定一个环境变量\Colorbox{lightgrey}{\lstinline{INSTALL_MOD_PATH}}，指出模块安装的目录。如果没有设置，则所有的模块将会被安装到\Colorbox{lightgrey}{\lstinline{/lib/modules/$(KERNELRELEASE)/kernel/}}目录下，具体细节将会在第2章讨论。
+
+V3S处理器支持设备树，设备树是一些文件，可以用来描述硬件（相关细节会在第6章介绍）。无论如何，运行下列命令可以编译所有ARCH设备树：
+
+\begin{mycode}{编译所有设备树}
+$ ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- make dtbs
+\end{mycode}
+
+然而，dtbs选项不一定适用于所有支持设备树的平台。要构建一个单独的DTB，应该执行下列命令：
+
+\begin{mycode}{单独编译DTB文件}
+$ ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- make atguigupi.dtb
+\end{mycode}
+
+\section{内核代码编写风格}
+
+深入学习本节之前应该先参考一下内核编码风格手册，它位于内核源代码树的\Colorbox{lightgrey}{\lstinline{Documentation/CodingStyle}}目录下。编码风格是应该遵循的一套规则，如果想要内核开发人员接受其补丁就应该遵守这一规则。其中一些规则涉及缩进、程序流程、命名约定等。
+
+常见的规则如下。
+
+\begin{itemize}
+    \item 始终使用8个字符的制表符缩进，每一行不能超过80个字符。如果缩进妨碍函数书写，那只能说明嵌套层次太多了。
+    \item 每一个不被导出的函数或变量都必须声明为静态的（static）。
+    \item 在带括号表达式的内部两端不要添加空格。
+    
+    \Colorbox{lightgrey}{\lstinline{s = sizeof(struct file);}}是可以接受的，
+    
+    而\Colorbox{lightgrey}{\lstinline{s = sizeof( struct file );}}是不被接受的。
+    \item 禁止使用\Colorbox{lightgrey}{\lstinline{typedef}}。
+    \item 请使用\Colorbox{lightgrey}{\lstinline{/* this */}}注释风格，不要使用\Colorbox{lightgrey}{\lstinline{// this}}。
+    \item 宏定义应该大写，但函数宏可以小写。
+    \item 不要试图用注释去解释一段难以阅读的代码。应该重写代码，而不是添加注释。
+\end{itemize}
+
+\section{内核结构分配和初始化}
+
+内核总是为其数据结构和函数提供两种可能的分配机制。
+
+下面是其中的一些数据结构。
+
+\begin{itemize}
+\item 工作队列。
+\item 列表。
+\item 等待队列。
+\item Tasklet。
+\item 定时器。
+\item 完成量。
+\item 互斥锁。
+\item 自旋锁。
+\end{itemize}
+
+动态初始化器是通过宏定义实现的，因此全用大写：
+
+\begin{itemize}
+    \item \Colorbox{lightgrey}{\lstinline{INIT_LIST_HEAD()}}
+    \item \Colorbox{lightgrey}{\lstinline{DECLARE_WAIT_QUEUE_HEAD()}}
+    \item \Colorbox{lightgrey}{\lstinline{DECLARE_TASKLET()}}
+    \item 等等
+\end{itemize}
+
+表示框架设备的数据结构总是动态分配的，每个都有其自己的分配和释放API。框架设备类型如下。
+
+\begin{itemize}
+\item 网络设备。
+\item 输入设备。
+\item 字符设备。
+\item IIO设备。
+\item 类设备。
+\item 帧缓冲。
+\item 调节器。
+\item PWM设备。
+\item RTC。
+\end{itemize}
+
+静态对象在整个驱动程序范围内都是可见的，并且通过该驱动程序管理的每个设备也是可见的。而动态分配对象则只对实际使用该模块特定实例的设备可见。
+
+\section{类、对象、面向对象的编程}
+
+内核通过类和设备实现面向对象的编程。内核子系统被抽象成类，有多少子系统，\Colorbox{lightgrey}{\lstinline{/sys/class/}}下几乎就有多少个目录。\Colorbox{lightgrey}{\lstinline{struct kobject}}结构是整个实现的核心，它包含一个引用计数器，以便于内核统计有多少用户使用了这个对象。每个对象都有一个父对象，在\Colorbox{lightgrey}{\lstinline{sysfs}}（加载之后）中会有一项。
+
+属于给定子系统的每个设备都有一个指向\Colorbox{lightgrey}{\lstinline{operations(ops)}}结构的指针，该结构提供一组可以在此设备上执行的操作。
+
+\chapter{设备驱动程序基础}
+
+驱动程序是专用于控制和管理特定硬件设备的软件，因此也被称作设备驱动程序。从操作系统的角度来看，它可以位于内核空间（以特权模式运行），也可以位于用户空间（具有较低的权限）。本教程仅涉及内核空间驱动程序，特别是Linux内核驱动程序。我们给出的定义是，设备驱动程序把硬件功能提供给用户程序。
+
+本章涉及以下主题。
+
+\begin{itemize}
+\item 模块构建过程及其加载和卸载。
+\item 驱动程序框架以及调试消息管理。
+\item 驱动程序中的错误处理。
+\end{itemize}
+
+\section{内核空间和用户空间}
+
+内核空间和用户空间的概念有点抽象，主要涉及内存和访问权限，如图\ref{fig:内核空间和用户空间示意图}所示。可以这样认为：内核是有特权的，而用户应用程序则是受限制的。这是现代CPU的一项功能，它可以运行在特权模式或非特权模式。学习第11章之后，这个概念会更加清晰。
+
+图\ref{fig:内核空间和用户空间示意图}说明内核空间和用户空间的分离，并强调了系统调用代表它们之间的桥梁（将在本章后面讨论）。每个空间的描述如下。
+
+\begin{itemize}
+    \item 内核空间：内核驻留和运行的地址空间。内核内存（或内核空间）是由内核拥有的内存范围，受访问标志保护，防止任何用户应用程序有意或无意间与内核搞混。另一方面，内核可以访问整个系统内存，因为它在系统上以更高的优先级运行。在内核模式下，CPU可以访问整个内存（内核空间和用户空间）。
+    \item 用户空间：正常程序（如vim等）被限制运行的地址（位置）空间。可以将其视为沙盒或监狱，以便用户程序不能混用其他程序拥有的内存或任何其他资源。在用户模式下，CPU只能访问标有用户空间访问权限的内存。用户应用程序运行到内核空间的唯一方法是通过系统调用，其中一些调用是read、write、open、close和mmap等。用户空间代码以较低的优先级运行。当进程执行系统调用时，软件中断被发送到内核，这将打开特权模式，以便该进程可以在内核空间中运行。系统调用返回时，内核关闭特权模式，进程再次受限。
+\end{itemize}
+
+\begin{figure}[!htbp]
+\centering
+
+
+\tikzset{every picture/.style={line width=0.75pt}} %set default line width to 0.75pt        
+
+\scalebox{0.5}{
+\begin{tikzpicture}[x=0.75pt,y=0.75pt,yscale=-1,xscale=1]
+%uncomment if require: \path (0,730); %set diagram left start at 0, and has height of 730
+
+%Shape: Rectangle [id:dp5729309877688962] 
+\draw  [fill={rgb, 255:red, 74; green, 144; blue, 226 }  ,fill opacity=1 ] (32,30) -- (360,30) -- (360,463) -- (32,463) -- cycle ;
+%Shape: Circle [id:dp4146631065291506] 
+\draw  [fill={rgb, 255:red, 248; green, 231; blue, 28 }  ,fill opacity=1 ] (74,147.5) .. controls (74,119.61) and (96.61,97) .. (124.5,97) .. controls (152.39,97) and (175,119.61) .. (175,147.5) .. controls (175,175.39) and (152.39,198) .. (124.5,198) .. controls (96.61,198) and (74,175.39) .. (74,147.5) -- cycle ;
+%Shape: Circle [id:dp43936873023108314] 
+\draw  [fill={rgb, 255:red, 248; green, 231; blue, 28 }  ,fill opacity=1 ] (153,257.5) .. controls (153,229.61) and (175.61,207) .. (203.5,207) .. controls (231.39,207) and (254,229.61) .. (254,257.5) .. controls (254,285.39) and (231.39,308) .. (203.5,308) .. controls (175.61,308) and (153,285.39) .. (153,257.5) -- cycle ;
+%Shape: Circle [id:dp42297673065034025] 
+\draw  [fill={rgb, 255:red, 248; green, 231; blue, 28 }  ,fill opacity=1 ] (52,353.5) .. controls (52,325.61) and (74.61,303) .. (102.5,303) .. controls (130.39,303) and (153,325.61) .. (153,353.5) .. controls (153,381.39) and (130.39,404) .. (102.5,404) .. controls (74.61,404) and (52,381.39) .. (52,353.5) -- cycle ;
+%Straight Lines [id:da07292076668851943] 
+\draw    (279,31) -- (279,464) ;
+%Shape: Rectangle [id:dp27802170297701934] 
+\draw  [fill={rgb, 255:red, 245; green, 166; blue, 35 }  ,fill opacity=1 ] (516,172) -- (872,172) -- (872,352) -- (516,352) -- cycle ;
+%Straight Lines [id:da4208187953232636] 
+\draw    (360,199) -- (516,199.99) ;
+\draw [shift={(518,200)}, rotate = 180.36] [color={rgb, 255:red, 0; green, 0; blue, 0 }  ][line width=0.75]    (10.93,-3.29) .. controls (6.95,-1.4) and (3.31,-0.3) .. (0,0) .. controls (3.31,0.3) and (6.95,1.4) .. (10.93,3.29)   ;
+%Straight Lines [id:da8337848177774614] 
+\draw    (517,316) -- (361,314.03) ;
+\draw [shift={(359,314)}, rotate = 0.73] [color={rgb, 255:red, 0; green, 0; blue, 0 }  ][line width=0.75]    (10.93,-3.29) .. controls (6.95,-1.4) and (3.31,-0.3) .. (0,0) .. controls (3.31,0.3) and (6.95,1.4) .. (10.93,3.29)   ;
+%Shape: Rectangle [id:dp44675008718689546] 
+\draw  [fill={rgb, 255:red, 184; green, 233; blue, 134 }  ,fill opacity=1 ] (872,132) -- (942,132) -- (942,422) -- (872,422) -- cycle ;
+
+% Text Node
+\draw (102,137) node [anchor=north west][inner sep=0.75pt]   [align=left] {进程A};
+% Text Node
+\draw (181,246.5) node [anchor=north west][inner sep=0.75pt]   [align=left] {进程B};
+% Text Node
+\draw (85,343) node [anchor=north west][inner sep=0.75pt]   [align=left] {进程C};
+% Text Node
+\draw (303,239) node [anchor=north west][inner sep=0.75pt]   [align=left] {lib c};
+% Text Node
+\draw (104,56) node [anchor=north west][inner sep=0.75pt]   [align=left] {用户空间};
+% Text Node
+\draw (667,257) node [anchor=north west][inner sep=0.75pt]   [align=left] {内核空间};
+% Text Node
+\draw (395,202) node [anchor=north west][inner sep=0.75pt]   [align=left] {系统调用：\\open\\write\\read\\...};
+% Text Node
+\draw (884,213) node [anchor=north west][inner sep=0.75pt]   [align=left] {硬件：\\内存\\硬盘\\视频卡\\...};
+
+\end{tikzpicture}}
+
+\caption{内核空间和用户空间示意图}
+\label{fig:内核空间和用户空间示意图}
+\end{figure}
+
+\subsection{模块的概念}
+
+模块之于Linux内核就像插件（组件）之于用户软件（如Firefox），模块动态扩展了内核功能，甚至不需要重新启动计算机就可以使用。大多数情况下，内核模块是即插即用的。一旦插入，就可以使用了。为了支持模块，构建内核时必须启用下面的选项：
+
+\begin{mycode}{支持模块}
+CONFIG_MODULES=y
+\end{mycode}
+
+\subsection{模块依赖}
+
+Linux内核中的模块可以提供函数或变量，用EXPORT\_SYMBOL宏导出它们即可供其他模块使用，这些被称作符号。模块B对模块A的依赖是指模块B使用从模块A导出的符号。
+
+在内核构建过程中运行depmod工具可以生成模块依赖文件。它读取\Colorbox{lightgrey}{\lstinline{/lib/modules/<kernel_release>/}}中的每个模块来确定它应该导出哪些符号以及它需要什么符号。该处理的结果写入文件modules.dep及其二进制版本modules.dep.bin。它是一种模块索引。
+
+\subsection{模块的加载和卸载}
+
+模块要运行，应该先把它加载到内核，可以用insmod或modprobe来实现，前者需要指定模块路径作为参数，这是开发期间的首选；后者更智能化，是生产系统中的首选。
+
+\begin{enumerate}
+    \item 手动加载。
+    
+    手动加载需要用户的干预，该用户应该拥有root访问权限。实现这一点的两种经典方法如下。
+
+    在开发过程中，通常使用insmod来加载模块，并且应该给出所加载模块的路径：
+
+    \begin{mycode}{insmod加载模块}
+        $ insmod /path/to/mydrv.ko
+    \end{mycode}
+
+    这种模块加载形式低级，但它是其他模块加载方法的基础，也是本教程中将要使用的方法。相反，系统管理员或在生产系统中则常用modprobe。modprobe更智能，它在加载指定的模块之前解析文件modules.dep，以便首先加载依赖关系。它会自动处理模块依赖关系，就像包管理器所做的那样：
+
+    \begin{mycode}{modprobe加载模块}
+        $ modprobe mydrv
+    \end{mycode}
+
+    能否使用modprobe取决于depmod是否知道模块的安装。
+
+    \begin{mycode}{能否使用modprobe}
+        $ /etc/modules-load.d/<filename>.conf
+    \end{mycode}
+
+    如果要在启动的时候加载一些模块，则只需创建文件\Colorbox{lightgrey}{\lstinline{/etc/modules-load.d/<filename>.conf}}，并添加应该加载的模块名称（每行一个）。
+    
+    \Colorbox{lightgrey}{\lstinline{<filename>}}应该是有意义的名称，人们通常使用模块：\Colorbox{lightgrey}{\lstinline{/etc/modules-load.d/modules.conf}}。
+    
+    当然也可以根据需要创建多个\Colorbox{lightgrey}{\lstinline{.conf}}文件。
+    
+    下面是一个\Colorbox{lightgrey}{\lstinline{/etc/modules-load.d/mymodules.conf}}文件中的内容：
+
+    \begin{mycode}{配置文件示例}
+        #this line is a comment
+        uio
+        iwlwifi
+    \end{mycode}
+
+    \item 自动加载
+    
+    depmod实用程序的作用不只是构建modules.dep和modules.dep.bin文件。内核开发人员实际编写驱动程序时已经确切知道该驱动程序将要支持的硬件。他们把驱动程序支持的所有设备的产品和厂商ID提供给该驱动程序。depmod还处理模块文件以提取和收集该信息，并在/lib/modules/<kernel\_release>/modules.alias中生成modules.alias文件，该文件将设备映射到其对应的驱动程序。
+
+    下面的内容摘自modules.alias：
+
+    \begin{mycode}{modules.alias}
+        alias usb:v0403pFF1Cd*dc*dsc*dp*ic*isc*ip*in* ftdi_sio
+        alias usb:v0403pFF18d*dc*dsc*dp*ic*isc*ip*in* ftdi_sio
+        alias usb:v0403pDAFFd*dc*dsc*dp*ic*isc*ip*in* ftdi_sio
+        alias usb:v0403pDAFEd*dc*dsc*dp*ic*isc*ip*in* ftdi_sio
+        alias usb:v0403pDAFDd*dc*dsc*dp*ic*isc*ip*in* ftdi_sio
+        alias usb:v0403pDAFCd*dc*dsc*dp*ic*isc*ip*in* ftdi_sio
+        alias usb:v0D8Cp0103d*dc*dsc*dp*ic*isc*ip*in* snd_usb_audio
+        alias usb:v*p*d*dc*dsc*dp*ic01isc03ip*in* snd_usb_audio
+        alias usb:v200Cp100Bd*dc*dsc*dp*ic*isc*ip*in* snd_usb_au
+    \end{mycode}
+
+    在这一步，需要一个用户空间热插拔代理（或设备管理器），通常是udev（或mdev），它将在内核中注册，以便在出现新设备时得到通知。
+    
+    通知由内核发布，它将设备描述（pid、vid、类、设备类、设备子类、接口以及可标识设备的所有其他信息）发送到热插拔守护进程，守护进程再调用modprobe，并向其传递设备描述信息。接下来，modprobe解析modules.alias文件，匹配与该设备相关的驱动程序。在加载模块之前，modprobe会在module.dep中查找与其有依赖关系的模块。如果发现，则在相关模块加载之前先加载所有依赖模块；否则，直接加载该模块。
+
+    \item 模块卸载
+    
+    常用的模块卸载命令是rmmod，人们更喜欢用这个来卸载insmod命令加载的模块。使用该命令时，应该把要卸载的模块名作为参数向其传递。
+    
+    模块卸载是内核的一项功能，该功能的启用或禁用由CONFIG\_MODULE\_UNLOAD配置选项的值决定。没有这个选项，就不能卸载任何模块。以下设置将启用模块卸载功能：
+
+    \begin{mycode}{模块卸载配置}
+        CONFIG_MODULE_UNLOAD=y
+    \end{mycode}
+
+    在运行时，如果模块卸载会导致其他不良影响，则即使有人要求卸载，内核也将阻止这样做。这是因为内核通过引用计数记录模块的使用次数，这样它就知道模块是否在用。如果内核认为删除一个模块是不安全的，就不会删除它。然而，以下设置可以改变这种行为：
+
+    \begin{mycode}{强制卸载模块配置}
+        MODULE_FORCE_UNLOAD=y
+    \end{mycode}
+
+    上面的选项应该在内核配置中设置，以强制卸载模块：
+
+    \begin{mycode}{强制卸载模块}
+        rmmod -f mymodule
+    \end{mycode}
+
+    而另一个更高级的模块卸载命令是\Colorbox{lightgrey}{\lstinline{modeprobe -r}}，它会自动卸载未使用的相关依赖模块：
+
+    \begin{mycode}{自动卸载相关依赖}
+        modeprobe -r mymodule
+    \end{mycode}
+
+    这对于开发者来说是一个非常有用的选择。用下列命令可以检查模块是否已加载：
+
+    \begin{mycode}{列出模块}
+        lsmod
+    \end{mycode}
+\end{enumerate}
+
+\section{驱动程序框架}
+
+\begin{mycode}{helloworld.c}
+#include <linux/init.h>
+#include <linux/module.h>
+#include <linux/kernel.h>
+
+static int __init helloworld_init(void) {
+    pr_info("Hello world!\n");
+    return 0;
+}
+
+static void __exit helloworld_exit(void) {
+    pr_info("End of the world\n");
+}
+
+module_init(helloworld_init);
+module_exit(helloworld_exit);
+MODULE_AUTHOR("Yuan Zuo <zuoyuantc@gmail.com>");
+MODULE_LICENSE("GPL");
+\end{mycode}
+
+\subsection{模块的入口点和出口点}
+
+内核驱动程序都有入口点和出口点：前者对应于模块加载时调用的函数（modprobe和insmod），后者是模块卸载时执行的函数（在执行rmmod或modprobe -r时）。
+
+main()函数是用C/C++编写的每个用户空间程序的入口点，当这个函数返回时，程序将退出。而对于内核模块，情况就不一样了：入口点可以随意命名，它也不像用户空间程序那样在main()返回时退出，其出点在另一个函数中定义。开发人员要做的就是通知内核把哪些函数作为入口点或出口点来执行。实际函数hellowolrd\_init和hellowolrd\_exit可以被命名成任何名字。实际上，唯一必须要做的是把它们作为参数提供给module\_init()和module\_exit()宏，将它们标识为相应的加载和删除函数。
+
+综上所述，module\_init()用于声明模块加载（使用insmod或modprobe）时应该调用的函数。初始化函数中要完成的操作是定义模块的行为。module\_exit()用于声明模块卸载（使用rmmod）时应该调用的函数。
+
+\begin{marker}
+在模块加载或卸载后，init函数或exit函数立即运行一次。
+\end{marker}
+
+\Colorbox{lightgrey}{\lstinline{__init和__exit属性}}
+
+\Colorbox{lightgrey}{\lstinline{__init}}和\Colorbox{lightgrey}{\lstinline{__exit}}实际上是在include/linux/init.h中定义的内核宏，如下所示：
+
+\begin{mycode}{宏定义}
+#define __init __section(.init.text)
+#define __exit __section(.exit.text)
+\end{mycode}
+
+\Colorbox{lightgrey}{\lstinline{__init}}关键字告诉链接器将该代码放在内核对象文件的专用部分。这部分事先为内核所知，它在模块加载和init函数执行后被释放。这仅适用于内置驱动程序，而不适用于可加载模块。内核在启动过程中第一次运行驱动程序的初始化函数。
+
+由于驱动程序不能卸载，因此在下次重启之前不会再调用其init函数，没有必要在init函数内记录引用次数。对于\Colorbox{lightgrey}{\lstinline{__exit}}关键字也是如此，在将模块静态编译到内核或未启用模块卸载功能时，其相应的代码会被忽略，因为在这两种情况下都不会调用exit函数。\Colorbox{lightgrey}{\lstinline{__exit}}对可加载模块没有影响。
+
+我们花一点时间进一步了解这些属性的工作方式，这涉及被称作可执行和可链接格式（ELF）的目标文件。ELF目标文件由不同的命名部分组成，其中一些部分是必需的，它们成为ELF标准的基础，但也可以根据自己的需要构建任一部分，并由特殊程序使用。内核就是这样做。执行\Colorbox{lightgrey}{\lstinline{objdump -h module.ko}}即可打印出指定内核模块module.ko的不同组成部分。
+
+打印内容只有少部分属于ELF标准。
+
+\begin{itemize}
+\item .text：包含程序代码，也称为代码。
+\item .data：包含初始化数据，也称为数据段。
+\item .rodata：用于只读数据。
+\item .comment：注释。
+\item 未初始化的数据段，也称为由符号开始的块（block started by symbol，bss）。
+\end{itemize}
+
+其他部分是根据内核的需要添加的。本章较重要的部分是.modeinfo和.init.text，前者存储有关模块的信息，后者存储以\_\_init宏为前缀的代码。
+
+链接器（Linux系统上的ld）是binutils的一部分，负责将符号（数据、代码等）放置到生成的二进制文件中的适当部分，以便在程序执行时可以被加载器处理。二进制文件中的这些部分可以自定义、更改它们的默认位置，甚至可以通过提供链接器脚本[称为链接器定义文件（LDF）或链接器定义脚本（LDS）]来添加其他部分。要实现这些操作只需通过编译器指令把符号的位置告知链接器即可，GNU C编译器为此提供了一些属性。Linux内核提供了一个自定义LDS文件，它位于arch/<arch>/kernel/vmlinux.lds.S中。对于要放置在内核LDS文件所映射的专用部分中的符号，使用\_\_init和\_\_exit进行标记。
+
+总之，\_\_init和\_\_exit是Linux指令（实际上是宏），它们使用C编译器属性指定符号的位置。这些指令指示编译器将以它们为前缀的代码分别放在.init.text和.exit.text部分，虽然内核可以访问不同的对象部分。
+
+\subsection{模块信息}
+
+即使不读代码，也应该能够收集到关于给定模块的一些信息（如作者、参数描述、许可）。内核模块使用其.modinfo部分来存储关于模块的信息，所有MODULE\_*宏都用参数传递的值更新这部分的内容。其中一些宏是MODULE\_DESCRIPTION()、MODULE\_AUTHOR()和MODULE\_LICENSE()。内核提供的在模块信息部分添加条目的真正底层宏是MODULE\_INFO(tag,info)，它添加的一般信息形式是tag=info。这意味着驱动程序作者可以自由添加其想要的任何形式信息，例如：
+
+\begin{mycode}{作者信息}
+MODULE_INFO(my_field_name, "What eeasy value");
+\end{mycode}
+
+在给定模块上执行\Colorbox{lightgrey}{\lstinline{objdump -d -j .modinfo}}命令可以转储内核模块.modeinfo部分的内容，如图2-3所示。
+
+\chapter{内核工具和辅助函数}
+
+\chapter{字符设备驱动程序}
+
+\chapter{平台设备驱动程序}
+
+\chapter{设备树的概念}
+
+设备树（DT，Derive Tree）是易于阅读的硬件描述文件，它采用JSON式的格式化风格，在这种简单的树形结构中，设备表示为带有属性的节点。属性可以是空（只有键，用来描述布尔值），也可以是键值对，其中的值可以包含任意的字节流。本章简单地介绍DT，每个内核子系统或框架都有自己的DT绑定。讲解有关话题时将包括具体的绑定。DT源于OF，这是计算机公司公认的标准，其主要目的是定义计算机固件系统的接口。
+
+本章涉及以下主题。
+
+\begin{itemize}
+\item 命名约定，以及别名和标签。
+\item 描述数据类型及其API。
+\item 管理寻址方案和访问设备资源。
+\item 实现OF匹配风格，提供应用程序的相关数据。
+\end{itemize}
+
+\section{设备树机制}
+
+将选项\Colorbox{lightgrey}{\lstinline{CONFIG_OF}}设置为Y即可在内核中启用DT。要在驱动程序中调用DT API，必须添加以下头文件：
+
+\begin{mycode}{头文件}
+#include <linux/of.h>
+#include <linux/of_device.h>
+\end{mycode}
+
+DT支持一些数据类型。下面通过对实例节点的描述来介绍这些数据类型：
+
+\begin{mycode}{数据类型}
+/* 注释 */
+/* 另一个注释 */
+node_label: nodename@reg{
+    string-property = "a string";
+    string-list = "red fish", "blue fish";
+    one-int-property = <197>; /* 该属性中的一个单元格*/
+    /* 每个数字（单元格）是一个 32 位的整型（uint32）
+     * 属性中有 3 个单元格
+     */
+    int-list-property = <0xbeef 123 0xabcd4>;
+    mixed-list-property = "a string", <0xadbcd45>, <35>, [0x01 0x23 0x45]
+    byte-array-property = [0x01 0x23 0x45 0x67];
+    boolean-property;
+};
+\end{mycode}
+
+以下是设备树中使用的一些数据类型的定义。
+
+\begin{itemize}
+\item 文本字符串用双引号表示。可以使用逗号来创建字符串列表。
+\item 单元格是由尖括号分隔的32位无符号整数。
+\item 布尔数据不过是空属性。其取值是true或false取决于属性存在与否。
+\end{itemize}
+
+\subsection{命名约定}
+
+每个节点都必须有\Colorbox{lightgrey}{\lstinline{<name> [@ <address>]}}形式的名称，其中\Colorbox{lightgrey}{\lstinline{<name>}}是一个字符串，其长度最多为31个字符，\Colorbox{lightgrey}{\lstinline{[@ <address>]}}是可选的，具体取决于节点代表是否为可寻址的设备。\Colorbox{lightgrey}{\lstinline{<address>}}是用来访问设备的主要地址。设备命名的一个例子如下：
+
+\begin{mycode}{例子}
+expander@20 {
+    compatible = "microchip,mcp23017";
+    reg = <20>;
+    [...]
+};
+\end{mycode}
+
+或者
+
+\begin{mycode}{例子}
+i2c@021a0000 {
+    compatible = "fsl,imx6q-i2c", "fsl,imx21-i2c";
+    reg = <0x021a0000 0x4000>;
+    [...]
+};
+\end{mycode}
+
+另外,仅当打算从另一节点的属性引用节点时,标记节点才有用。在6.1.2节将看到标签是指向节点的指针。
+
+\subsection{别名、标签和phandle}
+
+了解这3个要素的工作机制非常重要,它们经常在DT中使用。下面的DT例子解释它们是如何工作的:
+
+\begin{mycode}{三要素}
+aliases {
+    ethernet0 = &fec;
+    gpio0 = &gpio1;
+    gpio1 = &gpio2;
+    mmc0 = &usdhc1;
+    [...]
+};
+gpio1: gpio@0209c000 {
+    compatible = "fsl,imx6q-gpio", "fsl,imx35-gpio";
+    [...]
+};
+node_label: nodename@reg {
+    [...];
+    gpios = <&gpio1 7 GPIO_ACTIVE_HIGH>;
+};
+\end{mycode}
+
+标签不过是标记节点的方法,可以用唯一的名称来标识节点。在现实世界中,DT编译器将该名称转换为唯一的32位值。在前面的例子中,gpio1和node\_label都是标签。之后可以用标签来引用节点,因为标签对于节点是唯一的。
+
+指针句柄(pointer handle,简写为phandle)是与节点相关联的32位值,用于唯一标识该节点,以便可以从另一个节点的属性引用该节点。标签用于一个指向节点的指针。使用\Colorbox{lightgrey}{\lstinline{<&mylabel>}}可以指向标签为mylabel的节点。
+
+\begin{marker}
+    \&的用途就像在C编程语言中一样,用于获取元素的地址。
+\end{marker}
+
+在前面的例子中,\Colorbox{lightgrey}{\lstinline{&gpio1}}被转换为phandle,以便引用gpio1节点。下面的例子也是这样:
+
+\begin{mycode}
+thename@address {
+    property = <&mylabel>;
+};
+
+mylabel: thename@adresss {
+    [...]
+}
+\end{mycode}
+
+为了在查找节点时不遍历整棵树,引入了别名的概念。在DT中,别名节点可以看作是快速查找表,即另一个节点的索引。可以使用函数\Colorbox{lightgrey}{\lstinline{find_node_by_alias()}}来查找指定别名的节点。别名不是直接在DT源中使用,而是由Linux内核来引用。
+
+\subsection{DT编译器}
+
+DT有两种形式:文本形式(代表源,也称作DTS)和二进制块形式(代表编译后的DT),也称作DTB。源文件的扩展名是.dts。实际上,还有.dtsi文本文件,代表SoC级定义,而.dts文件代表开发板定义。就像在源文件(.c)中包含头文件(.h)一样,应该把.dtsi作为头文件包含在.dts文件中。而二进制文件则使用.dtb扩展名。
+
+实际上还有第三种形式,即DT在\Colorbox{lightgrey}{\lstinline{/proc/device-tree}}中的运行时表示。
+
+正如其名称所述,用于编译设备树的工具称为设备树编译器(dtc)。从根内核源代码,可以为特定的体系结构编译独立的特定DT或所有DT。
+
+下面为ARM SoC编译所有DT(.dts)文件:
+
+\begin{mycode}{编译设备树}
+ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- make dtbs
+\end{mycode}
+
+编译单独的DT:
+
+\begin{mycode}{编译单独的设备树文件}
+ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- make imx6dl-sabrelite.dtb
+\end{mycode}
+
+在上一个例子中,源文件的名称是imx6dl-sabrelite.dts。
+
+对于编译过的设备树(.dtb)文件,可以做相反的操作,从中提取源(.dts)文件:
+
+\begin{mycode}{反编译设备树文件}
+dtc -I dtb -O dtsarch/arm/boot/dts imx6dl-sabrelite.dtb > path/to/my_devicetree.dts
+\end{mycode}
+
+\begin{marker}
+为了调试,将DT公开给用户空间可能是有用的。使用CONFIG\_PROC\_DEVICETREE配置变量可以实现该目的。然后,可以浏览/proc/devicetree中的DT。
+\end{marker}
+
+\section{表示和寻址设备}
+
+每个设备在DT中至少有一个节点。某些属性对于许多设备类型是通用的,特别是位于内核已知总线(SPI、I2C、平台、MDIO等)上的设备。这些属性是reg、\#address-cells和\#size-cells,它们的用途是在其所在总线上进行设备寻址。也就是说,主要的寻址属性是reg,这是一个通用属性,其含义取决于设备所在的总线。size-cell和address-cell的前缀\#(sharp)可以翻译为length。
+
+每个可寻址设备都具有reg属性,该属性是reg = <address0size0 [address1size1] [address2size2] ...>形式的元组列表,其中每个元组代表设备使用的地址范围。\#size-cells(长度单元)指示使用多少个32位单元来表示大小,如果与大小无关,则可以是0。而\#address-cells(地址单元)指示用多少个32位单元来表示地址。换句话说,每个元组的地址元素根据\#address-cell来解释;长度元素也是如此,它根据\#size-cell进行解释。
+
+实际上,可寻址设备继承自它们父节点的\#size-cell和\#address-cell,父节点代表总线控制器。指定设备中存在\#size-cell和\#address-cell不会影响设备本身,但影响其子设备。换句话说,在解释给定节点的reg属性之前,必须知道父节点\#address-cells和\#size-cells的值。父节点可以自由定义适用于设备子节点(孩子)的寻址方案。
+
+\subsection{SPI和$I^2C$寻址}
+
+SPI和I2C设备都属于非内存映射设备,因为它们的地址对CPU不可访问。而父设备的驱动程序(总线控制器驱动程序)将代表CPU执行间接访问。每个I2C/SPI设备都表示为设备所在I2C/SPI总线节点的子节点。对于非存储器映射的设备,\#size-cells属性为0,寻址元组中的size元素为空。这意味着这种设备的reg属性总是只有一个单元:
+
+\begin{mycode}{例子}
+&i2c3 {
+    [...]
+    status = "okay";
+
+    temperature-sensor@49 {
+        compatible = "national,lm73";
+        reg = <0x49>;
+    };
+
+    pcf8523: rtc@68 {
+        compatible = "nxp,pcf8523";
+        reg = <0x68>;
+    };
+};
+
+&ecspi1 {
+    fsl,spi-num-chipselects = <3>;
+    cs-gpios = <&gpio5 17 0>, <&gpio5 17 0>, <&gpio5 17 0>;
+    status = "okay";
+    [...]
+
+    ad7606r8_0: ad7606r8@1 {
+        compatible = "ad7606-8";
+        reg = <1>;
+        spi-max-frequency = <1000000>;
+        interrupt-parent = <&gpio4>;
+        interrupts = <30 0x0>;
+        convst-gpio = <&gpio6 18 0>;
+    };
+};
+\end{mycode}
+
+查看arch/arm/boot/dts/imx6qdl.dtsi中的SoC级文件就会发现:在i2c和spi节点中,\#size-cells和\#address-cells分别设置为0(前者)和1(后者),它们分别是前面所列I2C和SPI设备的父节点。这有助于理解它们的reg属性,reg属性只是一个保存地址值的单元格。
+
+I2C设备的reg属性用于指定总线上设备的地址。对于SPI设备,reg表示从控制器节点所具有的芯片选择列表中分配给设备的芯片选择线的索引。例如,对于ad7606r8 ADC,芯片选择线索引是1,对应于cs-gpios中的<\&gpio5 17 0>,cs-gpios是控制器节点的芯片选择列表。
+
+为什么使用I2C/SPI节点的phandle:因为I2C/SPI设备应在开发板文件(.dts)中声明,而I2C/SPI总线控制器在SoC级文件(.dtsi)中声明。
+
+\subsection{平台设备寻址}
+
+本节介绍简单的内存映射设备,其内存可由CPU访问。在这里,reg属性仍然定义设备的地址,这是可以访问设备的内存区域列表。每个区域用单元格元组表示,其中第一个单元格是内存区域的基地址,第二个元组是该区域的大小。它具有的形式是reg = <base0 length0 [base1 length1] [address2 length2] ...>。每个元组代表设备使用的地址范围。
+
+在现实世界中,人们应该在知道其他两个属性(\#size-cells和\#address-cells)值的情况下解释reg属性。\#size-cells指出在每个子reg元组中长度字段有多大。\#address-cell也一样,它说明指定一个地址必须使用多少个单元。
+
+这种设备应该在具有特殊值compatible = "simple-bus"的节点内声明,这意味着简单的内存映射总线,没有特定的处理和驱动程序:
+
+\begin{mycode}{例子}
+soc {
+    #address-cells = <1>;
+    #size-cells = <1>;
+    compatible = "simple-bus";
+    aips-bus@02000000 { /* AIPS1 */
+        compatible = "fsl,aips-bus", "simple-bus";
+        #address-cells = <1>;
+        #size-cells = <1>;
+        reg = <0x02000000 0x100000>;
+        [...];
+
+        spba-bus@02000000 {
+            compatible = "fsl,spba-bus", "simple-bus";
+            #address-cells = <1>;
+            #size-cells = <1>;
+            reg = <0x02000000 0x40000>;
+            [...]
+            ecspi1: ecspi@02008000 {
+                #address-cells = <1>;
+                #size-cells = <0>;
+                compatible = "fsl,imx6q-ecspi", "fsl,imx51-ecspi";
+                reg = <0x02008000 0x4000>;
+                [...]
+            };
+            i2c1: i2c@021a0000 {
+                #address-cells = <1>;
+                #size-cells = <0>;
+                compatible = "fsl,imx6q-i2c", "fsl,imx21-i2c";
+                reg = <0x021a0000 0x4000>;
+                [...]
+            };
+        };
+    };
+\end{mycode}
+
+在前面的示例中,父节点compatible的属性值为simple-bus,其子节点将被注册为平台设备。设置\#size-cells = <0>也能够看到I2C和SPI总线控制器怎样改变其子节点的寻址方式,因为这与它们无关。从内核设备树文档可以查找所有绑定信息:Documentation/devicetree/bindings/。
+
+
+
+\chapter{$I^2C$客户端驱动程序}
+
+由飞利浦（现为恩智浦）发明的$I^2C$总线是双线制：由串行数据（SDA）、串行时钟（SCL）构成的异步串行总线。它是多主总线，但多主模式未广泛使用。SDA和SCL都是漏极开路/集电极开路，这意味着它们都可以使输出驱动为低电平，但是如果没有上拉电阻，则都不能使输出驱动为高电平。SCL由主设备生成，以便在总线上同步数据（由SDA传送）传送。从机和主机都可以发送数据（当然不是同时），因此SDA是双向线路。这就是说SCL信号也是双向的，因为从机可以通过保持SCL线低电平来延长时钟。总线由主机控制，在这里的例子中它是SoC的一部分。该总线经常在嵌入式系统中，用于连接串行EEPROM、RTC芯片、GPIO扩展器、温度传感器等，如图7-1所示。
+
+\section{驱动程序架构}
+
+当为其编写驱动程序的设备位于物理总线（被称作总线控制器）上时，它一定依赖总线的驱动程序，也就是控制器驱动程序，它负责在设备之间共享总线访问。控制器驱动程序在设备和总线之间提供抽象层。例如，当在$I^2C$或USB总线上执行事务（读取或写入）时，$I^2C$/USB总线控制器将在后台透明地处理该事务。每个总线控制器驱动程序都提供一组函数，以简化位于该总线上设备驱动程序的开发。这适用于每个物理总线（$I^2C$、SPI、USB、PCI、SDIO等）。$I^2C$驱动程序在内核中表示为\Colorbox{lightgrey}{\lstinline{struct i2c_driver}}的实例。$I^2C$客户端（代表设备本身）由\Colorbox{lightgrey}{\lstinline{struct i2c_client}}结构表示。
+
+\section{总结}
+
+学会如何处理$I^2C$设备驱动程序之后，可以付诸实践了：在市场上选购任一款$I^2C$设备，编写相应的驱动程序，并支持DT。
+
+本章讨论了内核中的$I^2C$内核和相关的API，包括设备树支持，介绍了与$I^2C$设备通信的必要技能。读者现在应该能够编写出高效的probe函数，并注册到$I^2C$内核中了。第8章将使用在这里学到的技能开发SPI设备驱动程序。
+
+\chapter{SPI设备驱动程序}
+
+\chapter{Regmap API——寄存器映射抽象}
+
+\chapter{IIO框架}
+
+\chapter{内核内存管理}
+
+\chapter{DMA——直接内存访问}
+
+\chapter{Linux设备模型}
+
+\chapter{引脚控制和GPIO子系统}
+
+\chapter{GPIO控制器驱动程序——gpio\_chip}
+
+\chapter{高级IRQ管理}
+
+\chapter{输入设备驱动程序}
+
+\chapter{RTC驱动程序}
+
+\chapter{PWM驱动程序}
+
+\chapter{调节器框架}
+
+\chapter{帧缓冲驱动程序}
+
+\chapter{网络接口卡驱动程序}
+
+
+
+\end{document}
