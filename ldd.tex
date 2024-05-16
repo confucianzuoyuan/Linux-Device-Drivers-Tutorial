@@ -92,6 +92,8 @@
 
 \mainmatter
 
+\part{Linux驱动}
+
 \chapter{简介}
 
 Linux内核是一种复杂、轻便、模块化并被广泛使用的软件。大约80\%的服务器和全世界一半以上设备的嵌入式系统上运行着Linux内核。设备驱动程序在整个Linux系统中起着至关重要的作用。由于Linux已成为非常流行的操作系统。
@@ -830,6 +832,109 @@ soc {
 
 在前面的示例中,父节点compatible的属性值为simple-bus,其子节点将被注册为平台设备。设置\#size-cells = <0>也能够看到I2C和SPI总线控制器怎样改变其子节点的寻址方式,因为这与它们无关。从内核设备树文档可以查找所有绑定信息:Documentation/devicetree/bindings/。
 
+\section{处理资源}
+
+驱动程序的主要目的是处理和管理设备,并且大部分时间将其功能展现给用户空间。这里的目标是收集设备的配置参数,特别是资源(存储区、中断线、DMA通道、时钟等)。
+
+以下是本节中将要使用的设备节点。它是在arch/arm/boot/dts/imx6qdl.dtsi中定义的i.MX6 UART设备节点:
+
+\begin{mycode}{uart}
+uart1: serial@02020000 {
+    compatible = "fsl,imx6q-uart","fsl,imx21-uart";
+    reg = <0x02020000 0x4000>;
+    interrupts = <0 26 IRQ_TYPE_LEVEL_HIGH>;
+    clocks = <&clks IMX6QDL_CLK_UART_IPG>,<&clks IMX6QDL_CLK_UART_SERIAL>;
+    clock-names = "ipg", "per";
+    dmas = <&sdma 25 4 0>, <&sdma 26 4 0>;
+    dma-names = "rx", "tx";
+    status = "disabled";
+};
+\end{mycode}
+
+\subsection{命名资源的概念}
+
+当驱动程序期望某种类型的资源列表时,由于编写开发板设备树的人通常不是写驱动程序的人,因此不能保证该列表是以驱动程序期望的方式排序。例如,驱动程序可能期望其设备节点具有2条IRQ线路,一条用于索引0处的Tx事件,另一条用于索引1处的Rx。如果这种顺序得不到满足会发生什么情况?驱动就会发生异常行为。为了避免这种不匹配,引入了命名资源(clock、irq、dma、reg)的概念。它由定义资源列表和命名组成,因此无论索引是什么,给定的名称总将与资源相匹配。
+
+命名资源的相应属性如下。
+
+\begin{itemize}
+    \item reg-names:reg属性中的内存区域列表。
+    \item clock-names:clocks属性中命名clocks。
+    \item interrupt-names:为interrupts属性中的每个中断指定一个名称。
+    \item dma-names:用于dma属性。
+\end{itemize}
+
+现在,创建一个假的设备节点以解释上述概念:
+
+\begin{mycode}{例子}
+fake_device {
+    compatible = "packt,fake-device";
+    reg = <0x02020000 0x4000>, <0x4a064800 0x200>, <0x4a064c00 0x200>;
+    reg-names = "config", "ohci", "ehci";
+    interrupts = <0 66 IRQ_TYPE_LEVEL_HIGH>, <0 67 IRQ_TYPE_LEVEL_HIGH>;
+    interrupt-names = "ohci", "ehci";
+    clocks = <&clks IMX6QDL_CLK_UART_IPG>, <&clks IMX6QDL_CLK_UART_SERIAL>;
+    clock-names = "ipg", "per";
+    dmas = <&sdma 25 4 0>, <&sdma 26 4 0>;
+    dma-names = "rx", "tx";
+};
+\end{mycode}
+
+驱动程序中提取每个命名资源的代码如下所示:
+
+\begin{mycode}{提取命名资源}
+struct resource *res1, *res2;
+res1 = platform_get_resource_byname(pdev, IORESOURCE_MEM, "ohci");
+res2 = platform_get_resource_byname(pdev, IORESOURCE_MEM, "config");
+struct dma_chan *dma_chan_rx, *dma_chan_tx;
+dma_chan_rx = dma_request_slave_channel(&pdev->dev, "rx");
+dma_chan_tx = dma_request_slave_channel(&pdev->dev, "tx");
+int txirq, rxirq;
+txirq = platform_get_irq_byname(pdev, "ohci");
+rxirq = platform_get_irq_byname(pdev, "ehci");
+structclk *clck_per, *clk_ipg;
+clk_ipg = devm_clk_get(&pdev->dev, "ipg");
+clk_ipg = devm_clk_get(&pdev->dev, "pre");
+\end{mycode}
+
+这样,就可以确保把正确的名字映射到正确的资源上,而不用再使用索引了。
+
+\subsection{访问寄存器}
+
+在这里,驱动程序将占用内存区域,并将其映射到虚拟地址空间。第11章将进一步讨论这个问题。
+
+\begin{mycode}{例子}
+struct resource *res;
+void __iomem *base;
+res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+/*
+* 这里使用request_mem_region(res->start,
+resource_size(res), pdev->name)
+* 和ioremap(iores->start, resource_size(iores)请
+求和映射内存区域
+*
+* 这些功能在第11章中讨论
+*/
+base = devm_ioremap_resource(&pdev->dev, res);
+if (IS_ERR(base))
+    return PTR_ERR(base);
+\end{mycode}
+
+\Colorbox{lightgrey}{\lstinline{platform_get_resource()}}将根据第一个(索引0)reg赋值中提供的内存区域设置struct res的开始和结束字段。请记住\Colorbox{lightgrey}{\lstinline{platform_get_resource()}}的最后一个参数代表资源索引。在前面的示例中,0指定了该资源类型的第一个值,以防在DT节点中为设备分配多个存储区域。在这个例子中,reg = <0x02020000 0x4000>表示分配的区域从物理地址0x02020000开始,大小为0x4000字节。\Colorbox{lightgrey}{\lstinline{platform_get_resource()}}将设置res.start = 0x02020000和res.end = 0x02023fff。
+
+\subsection{处理中断}
+
+中断接口实际上分为两部分,消费者端和控制器端。DT中用4个属性描述中断连接。
+
+控制器是为消费者提供中断线的设备。在控制器端有以下属性。
+
+\begin{itemize}
+\item interrupt-controller:为了将设备标记为中断控制器而应该定义的空(布尔)属性。
+\item \#interrupt-cells:这是中断控制器的属性。它指出为该中断控制器指定一个中断要使用多少个单元。
+\end{itemize}
+
+消费者是生成中断的设备。消费者绑定需要以下属性。
+
 
 
 \chapter{$I^2C$客户端驱动程序}
@@ -839,6 +944,26 @@ soc {
 \section{驱动程序架构}
 
 当为其编写驱动程序的设备位于物理总线（被称作总线控制器）上时，它一定依赖总线的驱动程序，也就是控制器驱动程序，它负责在设备之间共享总线访问。控制器驱动程序在设备和总线之间提供抽象层。例如，当在$I^2C$或USB总线上执行事务（读取或写入）时，$I^2C$/USB总线控制器将在后台透明地处理该事务。每个总线控制器驱动程序都提供一组函数，以简化位于该总线上设备驱动程序的开发。这适用于每个物理总线（$I^2C$、SPI、USB、PCI、SDIO等）。$I^2C$驱动程序在内核中表示为\Colorbox{lightgrey}{\lstinline{struct i2c_driver}}的实例。$I^2C$客户端（代表设备本身）由\Colorbox{lightgrey}{\lstinline{struct i2c_client}}结构表示。
+
+\subsection{i2c\_driver结构}
+
+I2C驱动程序在内核中声明为struct i2c\_driver实例,它看起来像下面这样:
+
+\begin{mycode}{i2c\_driver}
+struct i2c_driver {
+    /* 标准驱动模型接口 */
+    int (*probe)(struct i2c_client *, const struct i2c_device_id *);
+    int (*remove)(struct i2c_client *);
+    /* 与枚举无关的驱动类型接口 */
+    void (*shutdown)(struct i2c_client *);
+    struct device_driver driver;
+    const struct i2c_device_id *id_table;
+};
+\end{mycode}
+
+struct i2c\_driver结构包含并描述通用访问例程,这些例程是处理声明驱动程序的设备所必需的,而struct i2c\_client则包含设备特有的信息,如其地址。struct i2c\_client结构表示和描述I2C设备。本章后面的部分将介绍如何填充这些结构。
+
+
 
 \section{总结}
 
@@ -876,6 +1001,252 @@ soc {
 
 \chapter{网络接口卡驱动程序}
 
+\part{Linux移植}
 
+\chapter{移植到SD卡}
+
+本次实验宿主机使用全新的Ubuntu20.04环境，并在完成实验后用户目录下有以下结构的文件夹。
+
+首先需要创建架构。
+
+\begin{mycode}{文件结构}
+v3s-workspace
+- linux
+- partitions
+-- boot
+--- boot.scr
+--- sun8i-v3s-licheepi-zero-dock.dtb
+--- zImage
+-- root
+- u-boot
+- modules
+- buildroot
+- boot.cmd
+\end{mycode}
+
+然后下载所有本次实验会使用到的代码和依赖。
+
+\begin{mycode}{安装依赖}
+# 安装依赖
+sudo apt-get install flex bison gcc make gcc-arm-linux-gnueabihf libncurses-dev swig python-dev device-tree-compiler python3-setuptools python3-dev libssl-dev u-boot-tools g++ patch
+
+# 下载Mainline Linux,你可以在https://www.kernel.org寻找最新的LTS版本
+wget https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.1.19.tar.xz
+# extract是zsh提供的自动解压指令，可以替换成tar的对应格式解压指令
+extract linux-6.1.19.tar.xz
+mv linux-6.1.19 linux
+
+# 下载U-Boot，我们这里没有使用LTS版本，你可以进入cd进去后切换到LTS分支
+git clone git://git.denx.de/u-boot.git
+
+# 下载Buildroot，你可以在https://buildroot.org/downloads寻找最新的版本
+wget https://buildroot.org/downloads/buildroot-2023.02.tar.xz
+extract buildroot-2023.02.tar.xz
+mv buildroot-2023.02 buildroot
+\end{mycode}
+
+每一章节结束后请返回\Colorbox{lightgrey}{\lstinline{v3s-workspace}}目录。
+
+\section{编译U-Boot}
+
+\begin{mycode}{编译U-Boot}
+cd u-boot
+# 使用荔枝派Nano的默认配置
+make CROSS_COMPILE=arm-linux-gnueabihf- LicheePi_Zero_defconfig
+# 编译
+make CROSS_COMPILE=arm-linux-gnueabihf-
+# 拷贝U-Boot镜像
+cp u-boot-sunxi-with-spl.bin ../partitions
+\end{mycode}
+
+接下来我们需要准备U-Boot启动所需的配置文件，将以下内容写入boot.cmd。
+
+\begin{mycode}
+setenv bootargs console=tty0 console=ttyS0,115200 panic=5 rootwait root=/dev/mmcblk0p2 rw
+load mmc 0:1 0x43000000 sun8i-v3s-licheepi-zero-dock.dtb
+load mmc 0:1 0x42000000 zImage
+bootz 0x42000000 - 0x43000000
+\end{mycode}
+
+接着编译配置文件。
+
+\begin{mycode}{编译配置文件}
+mkimage -C none -A arm -T script -d boot.cmd ./partitions/boot/boot.scr
+\end{mycode}
+
+\section{编译Linux内核}
+
+\begin{mycode}{配置编译}
+cd linux
+# 使用linux-sunxi项目的默认配置，该项目主要包含全志各芯片的硬件支持文档和手册
+make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- sunxi_defconfig
+# 进入内核配置菜单
+make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- menuconfig
+\end{mycode}
+
+\begin{marker}
+    在内核配置菜单中，将 \Colorbox{lightgrey}{\lstinline{Networking support > Wireless}} 中的选项全部选中。
+\end{marker}
+
+我们需要修改\Colorbox{lightgrey}{\lstinline{arch/arm/boot/dts/sun8i-v3s-licheepi-zero.dts}}以启用以太网和USB支持。
+
+\begin{mycode}{设备树文件}
+/dts-v1/;
+#include "sun8i-v3s.dtsi"
+#include "sunxi-common-regulators.dtsi"
+
+/ {
+	model = "Lichee Pi Zero";
+	compatible = "licheepi,licheepi-zero", "allwinner,sun8i-v3s";
+
+	aliases {
+		serial0 = &uart0;
+		ethernet0 = &emac; /* 添加这一行 */
+	};
+
+	chosen {
+		stdout-path = "serial0:115200n8";
+	};
+
+	leds {
+		compatible = "gpio-leds";
+
+		blue_led {
+			label = "licheepi:blue:usr";
+			gpios = <&pio 6 1 GPIO_ACTIVE_LOW>; /* PG1 */
+		};
+
+		green_led {
+			label = "licheepi:green:usr";
+			gpios = <&pio 6 0 GPIO_ACTIVE_LOW>; /* PG0 */
+			default-state = "on";
+		};
+
+		red_led {
+			label = "licheepi:red:usr";
+			gpios = <&pio 6 2 GPIO_ACTIVE_LOW>; /* PG2 */
+		};
+	};
+
+  /* 添加以下soc部分 */
+	soc {
+		ehci0: usb@01c1a000 {
+			compatible = "allwinner,sun8i-v3s-ehci", "generic-ehci";
+			reg = <0x01c1a000 0x100>;
+			interrupts = <GIC_SPI 72 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&ccu CLK_BUS_EHCI0>, <&ccu CLK_BUS_OHCI0>;
+			resets = <&ccu RST_BUS_EHCI0>, <&ccu RST_BUS_OHCI0>;
+			status = "okay";
+		};
+
+		ohci0: usb@01c1a400 {
+			compatible = "allwinner,sun8i-v3s-ohci", "generic-ohci";
+			reg = <0x01c1a400 0x100>;
+			interrupts = <GIC_SPI 73 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&ccu CLK_BUS_EHCI0>, <&ccu CLK_BUS_OHCI0>,
+			<&ccu CLK_USB_OHCI0>;
+			resets = <&ccu RST_BUS_EHCI0>, <&ccu RST_BUS_OHCI0>;
+			status = "okay";
+		};
+	};
+};
+
+&mmc0 {
+	broken-cd;
+	bus-width = <4>;
+	vmmc-supply = <&reg_vcc3v3>;
+	status = "okay";
+};
+
+&uart0 {
+	pinctrl-0 = <&uart0_pb_pins>;
+	pinctrl-names = "default";
+	status = "okay";
+};
+
+&usb_otg {
+	dr_mode = "host";
+	status = "okay";
+};
+
+&usbphy {
+	usb0_id_det-gpios = <&pio 5 6 GPIO_ACTIVE_LOW>;
+	status = "okay";
+};
+
+/* 添加emac部分 */
+&emac {
+	allwinner,leds-active-low;
+	status = "okay";
+};
+\end{mycode}
+
+
+接着执行以下指令。
+
+\begin{mycode}
+# 编译内核，-j4的4可以修改为你的CPU核心数
+ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- make -j4 zImage
+# 编译DTB文件，本文件用于Kernel识别外设，是 Mainline Kernel不可缺少的部分，-j4的4可以修改为你的CPU核心数
+ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- make -j4 dtbs
+# 编译Modules，-j4的4可以修改为你的CPU核心数
+ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- make -j4 modules
+# 安装模块
+ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- INSTALL_MOD_PATH=../modules  make modules modules_install
+# 拷贝生成的zImage内核镜像和DTB文件
+cp arch/arm/boot/zImage ../partitions/boot
+cp arch/arm/boot/dts/sun8i-v3s-licheepi-zero-dock.dtb ../partitions/boot
+\end{mycode}
+
+\section{编译Buildroot}
+
+\section{写入SD卡}
+
+\section{将开发板作为ssh服务器来使用}
+
+连接串口，波特率设置为 115200 。
+
+使用 putty 软件连接嵌入式Linux开发板。
+
+\begin{mycode}{启动sshd服务}
+vi /etc/ssh/sshd_config
+# 将文件中的PermitRootLogin设置为yes
+# PermitRootLogin yes
+# 保存退出
+
+# 使用passwd设置密码
+passwd
+# 启动sshd服务
+/usr/sbin/sshd
+\end{mycode}
+
+\begin{marker}
+这里建议重启一下板子，否则 /etc/ssh/sshd_config 不一定能够生效，我实测时就是需要重启才可以。
+\end{marker}
+
+
+\begin{mycode}{启动以太网服务}
+ifconfig eth0 up
+udhcpc
+\end{mycode}
+
+\section{安装无线网卡驱动}
+
+\begin{mycode}{安装无线网卡驱动}
+cd v3s-workspace
+git clone https://github.com/al177/esp8089.git
+cd esp8089
+ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- make -C ../linux/ M=${PWD} modules
+
+# 172.17.0.58替换为你的电脑看到的Linux开发板的ip地址。
+scp esp8089.ko root@172.17.0.58:/root/
+ssh root@172.17.0.58
+# 进入嵌入式Linux开发板之后的操作
+# 加载wifi驱动
+atguigu-pi>insmod esp8089.ko
+atguigu-pi>ifconfig wlan0 up
+atguigu-pi>wpa_passphrase your_SSID your_passphrase > your_SSID.conf
+atguigu-pi>wpa_supplicant -B -i wlan0 -c your_SSID.conf
+\end{mycode}
 
 \end{document}
