@@ -1484,4 +1484,81 @@ int main(char argc,char *argv[])
 
 经过这一次修改，我们重新编译kernel内核，烧入zImage，启动后输入key程序，这样就得到了我们想要的最终结果，即稳定地输出按键值。
 
+\chapter{PWM驱动举例}
+
+要使能pwm功能，最主要就是修改设备树配置文件，
+
+第一，在sun8i-v3s.dtsi中，添加pwm0和pwm1节点，
+
+\begin{mycode}{pwm设备树}
+pwm0_pins: pwm0 {
+    pins = "PB4";
+    function = "pwm0";
+};
+
+pwm1_pins: pwm1 {
+    pins = "PB5";
+    function = "pwm1";
+};
+\end{mycode}
+
+第二，在sun8i-v3s-licheepi-zero.dts中使能pwm，
+
+\begin{mycode}{使能pwm}
+&pwm {
+    pinctrl-names = "default";
+    pinctrl-0 = <&pwm0_pins>, <&pwm1_pins>;
+    status = "okay";
+};
+\end{mycode}
+
+修改了这两个文件，下面要做的就是把他们编译成dtb，下载到sd卡里面，等待重启即可。注意，拷贝的dtb文件是un8i-v3s-licheepi-zero-dock.dtb。
+
+如果对驱动代码有兴趣，可以通过sun8i-v3s-pwm这个关键字去查找一下。查找后发现，相关的驱动文件名是drivers/pwm/pwm-sun4i.c。
+
+此外，之前这份驱动已经包含在了zImage里面，所以不需要重新编译内核。
+
+前面如果大家做过实验，就可以发现，如果我们没有修改设备树文件，那么发现在/sys/class/pwm节点下什么也没有。但是修改了之后，就会发现/sys/class/pwm一下子多了很多的内容，
+
+\begin{mycode}{显示内容}
+# cd /sys/class
+# cd pwm/
+# ls
+pwmchip0
+# cd pwmchip0/
+# ls
+device     export     npwm       power      subsystem  uevent     unexport
+# ls -l
+total 0
+lrwxrwxrwx    1 root     root             0 Jan  1 00:31 device -> ../../../1c21400.pwm
+--w-------    1 root     root          4096 Jan  1 00:31 export
+-r--r--r--    1 root     root          4096 Jan  1 00:31 npwm
+drwxr-xr-x    2 root     root             0 Jan  1 00:31 power
+lrwxrwxrwx    1 root     root             0 Jan  1 00:31 subsystem -> ../../../../../../class/pwm
+-rw-r--r--    1 root     root          4096 Jan  1 00:31 uevent
+--w-------    1 root     root          4096 Jan  1 00:31 unexport
+\end{mycode}
+
+首先，我们可以通过export来使能通道，输入0就可以创建通道0，输入1就可以创建通道1，根据具体情况而定。
+
+\begin{mycode}{举例}
+echo 0 > /sys/class/pwm/pwmchip0/export
+# 通道创建好了，就可以进入到通道里面，看看有哪些配置。以通道0为例，
+cd pwm0
+ls
+\end{mycode}
+
+简单来说，可以通过三个数值就可以实现最基本的pwm功能。其中period代表频率，duty\_cycle代表空占比，enable代表使能开关，
+
+\begin{mycode}{设置pwm波的参数}
+echo 1000000 > /sys/class/pwm/pwmchip0/pwm0/period
+echo 500000 > /sys/class/pwm/pwmchip0/pwm0/duty_cycle
+echo 1 > /sys/class/pwm/pwmchip0/pwm0/enable
+echo 0 > /sys/class/pwm/pwmchip0/pwm0/enable
+\end{mycode}
+
+假设cpu频率是1GHz，而我们希望得到的pwm频率是1000，那么这里的period就是1G/1000，而duty\_cycle被设置成了500000，代表空占比是50\%，enable为1代表打开，0则代表关闭。通道1也是这个道理，用同样的方法配置一下即可。
+
+使用逻辑分析仪来观察一下。
+
 \end{document}
