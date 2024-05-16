@@ -732,20 +732,20 @@ dtc -I dtb -O dtsarch/arm/boot/dts imx6dl-sabrelite.dtb > path/to/my_devicetree.
 \end{mycode}
 
 \begin{marker}
-为了调试,将DT公开给用户空间可能是有用的。使用CONFIG\_PROC\_DEVICETREE配置变量可以实现该目的。然后,可以浏览/proc/devicetree中的DT。
+为了调试,将DT公开给用户空间可能是有用的。使用CONFIG\_PROC\_DEVICETREE配置变量可以实现该目的。然后,可以浏览/proc/device-tree中的DT。
 \end{marker}
 
 \section{表示和寻址设备}
 
 每个设备在DT中至少有一个节点。某些属性对于许多设备类型是通用的,特别是位于内核已知总线(SPI、I2C、平台、MDIO等)上的设备。这些属性是reg、\#address-cells和\#size-cells,它们的用途是在其所在总线上进行设备寻址。也就是说,主要的寻址属性是reg,这是一个通用属性,其含义取决于设备所在的总线。size-cell和address-cell的前缀\#(sharp)可以翻译为length。
 
-每个可寻址设备都具有reg属性,该属性是reg = <address0size0 [address1size1] [address2size2] ...>形式的元组列表,其中每个元组代表设备使用的地址范围。\#size-cells(长度单元)指示使用多少个32位单元来表示大小,如果与大小无关,则可以是0。而\#address-cells(地址单元)指示用多少个32位单元来表示地址。换句话说,每个元组的地址元素根据\#address-cell来解释;长度元素也是如此,它根据\#size-cell进行解释。
+每个可寻址设备都具有reg属性,该属性是reg = <address0 size0 [address1 size1] [address2 size2] ...>形式的元组列表,其中每个元组代表设备使用的地址范围。\#size-cells(长度单元)指示使用多少个32位单元来表示大小,如果与大小无关,则可以是0。而\#address-cells(地址单元)指示用多少个32位单元来表示地址。换句话说,每个元组的地址元素根据\#address-cell来解释;长度元素也是如此,它根据\#size-cell进行解释。
 
 实际上,可寻址设备继承自它们父节点的\#size-cell和\#address-cell,父节点代表总线控制器。指定设备中存在\#size-cell和\#address-cell不会影响设备本身,但影响其子设备。换句话说,在解释给定节点的reg属性之前,必须知道父节点\#address-cells和\#size-cells的值。父节点可以自由定义适用于设备子节点(孩子)的寻址方案。
 
 \subsection{SPI和$I^2C$寻址}
 
-SPI和I2C设备都属于非内存映射设备,因为它们的地址对CPU不可访问。而父设备的驱动程序(总线控制器驱动程序)将代表CPU执行间接访问。每个I2C/SPI设备都表示为设备所在I2C/SPI总线节点的子节点。对于非存储器映射的设备,\#size-cells属性为0,寻址元组中的size元素为空。这意味着这种设备的reg属性总是只有一个单元:
+SPI和$I^2C$设备都属于非内存映射设备,因为它们的地址对CPU不可访问。而父设备的驱动程序(总线控制器驱动程序)将代表CPU执行间接访问。每个$I^2C$/SPI设备都表示为设备所在$I^2C$/SPI总线节点的子节点。对于非存储器映射的设备,\#size-cells属性为0,寻址元组中的size元素为空。这意味着这种设备的reg属性总是只有一个单元:
 
 \begin{mycode}{例子}
 &i2c3 {
@@ -782,9 +782,9 @@ SPI和I2C设备都属于非内存映射设备,因为它们的地址对CPU不可�
 
 查看arch/arm/boot/dts/imx6qdl.dtsi中的SoC级文件就会发现:在i2c和spi节点中,\#size-cells和\#address-cells分别设置为0(前者)和1(后者),它们分别是前面所列I2C和SPI设备的父节点。这有助于理解它们的reg属性,reg属性只是一个保存地址值的单元格。
 
-I2C设备的reg属性用于指定总线上设备的地址。对于SPI设备,reg表示从控制器节点所具有的芯片选择列表中分配给设备的芯片选择线的索引。例如,对于ad7606r8 ADC,芯片选择线索引是1,对应于cs-gpios中的<\&gpio5 17 0>,cs-gpios是控制器节点的芯片选择列表。
+$I^2C$设备的reg属性用于指定总线上设备的地址。对于SPI设备,reg表示从控制器节点所具有的芯片选择列表中分配给设备的芯片选择线的索引。例如,对于ad7606r8 ADC,芯片选择线索引是1,对应于cs-gpios中的<\&gpio5 17 0>,cs-gpios是控制器节点的芯片选择列表。
 
-为什么使用I2C/SPI节点的phandle:因为I2C/SPI设备应在开发板文件(.dts)中声明,而I2C/SPI总线控制器在SoC级文件(.dtsi)中声明。
+为什么使用$I^2C$/SPI节点的phandle:因为$I^2C$/SPI设备应在开发板文件(.dts)中声明,而I2C/SPI总线控制器在SoC级文件(.dtsi)中声明。
 
 \subsection{平台设备寻址}
 
@@ -1316,5 +1316,172 @@ atguigu-pi>ifconfig wlan0 up
 atguigu-pi>wpa_passphrase your_SSID your_passphrase > your_SSID.conf
 atguigu-pi>wpa_supplicant -B -i wlan0 -c your_SSID.conf
 \end{mycode}
+
+\part{驱动程序举例}
+
+\chapter{V3S按键驱动}
+
+我们的开发板上面，有5个按键本身不是通过gpio连接到soc上面的。它是通过adc的方法，连接到主芯片的。这个时候，不同的按键被按下的时候，就会生成不同的电压或者电流，那么完全可以根据对应的电信号，推算出当前是哪一个按键被按下去了。
+
+简单看一下电路之后，下面就是去找设备树，对应的信号是什么、在哪里。
+
+\section{查找设备树}
+
+在sun8i-v3s-licheepi-zero-dock.dts文件当中，我们发现了这样的内容，
+
+\begin{mycode}{设备树}
+&lradc {
+	vref-supply = <&reg_vcc3v0>;
+	status = "okay";
+ 
+	button@200 {
+		label = "Volume Up";
+		linux,code = <KEY_VOLUMEUP>;
+		channel = <0>;
+		voltage = <200000>;
+	};
+ 
+	button@400 {
+		label = "Volume Down";
+		linux,code = <KEY_VOLUMEDOWN>;
+		channel = <0>;
+		voltage = <400000>;
+	};
+ 
+	button@600 {
+		label = "Select";
+		linux,code = <KEY_SELECT>;
+		channel = <0>;
+		voltage = <600000>;
+	};
+ 
+	button@800 {
+		label = "Start";
+		linux,code = <KEY_OK>;
+		channel = <0>;
+		voltage = <800000>;
+	};
+};
+\end{mycode}
+
+很明显，每一个button都是和电路中的按键是一一对应的，这个没有问题。那么，我们不禁还有一个疑问，既然是ad转换得到的结果，那么肯定要知道ad相关的设备配置是恶还那么。仔细找了一下，可以在sun8i-v3s.dtsi文件发现这样的内容，
+
+\begin{mycode}{lradc的配置}
+lradc: lradc@01c22800 {
+    compatible = "allwinner,sun4i-a10-lradc-keys";
+    reg = <0x01c22800 0x400>;
+    interrupts = <GIC_SPI 30 IRQ_TYPE_LEVEL_HIGH>;
+    status = "disabled";
+};
+\end{mycode}
+
+看到这里，大家应该放心了，确实是有这么一个ad的驱动。兼容的设备是sun4i-a10-lradc-keys，寄存器地址空间是0x01c22800，长度是0x400，中断是GIC\_SPI类型，状态关闭。有了设备树，还有了兼容设备号，接下来的一步就是根据设备号sun4i-a10-lradc-keys找到对应的驱动文件。
+
+\section{查找驱动代码，准备测试程序}
+
+通过工具查找一下，不难发现，文件在这，即sun4i-lradc-keys.c，
+
+\begin{mycode}{ad驱动代码}
+static const struct of_device_id sun4i_lradc_of_match[] = {
+    { .compatible = "allwinner,sun4i-a10-lradc-keys", },
+    { /* sentinel */ }
+};
+MODULE_DEVICE_TABLE(of, sun4i_lradc_of_match);
+
+static struct platform_driver sun4i_lradc_driver = {
+    .driver = {
+        .name	= "sun4i-a10-lradc-keys",
+        .of_match_table = of_match_ptr(sun4i_lradc_of_match),
+    },
+    .probe	= sun4i_lradc_probe,
+};
+
+module_platform_driver(sun4i_lradc_driver);
+
+MODULE_DESCRIPTION("Allwinner sun4i low res adc attached tablet keys driver");
+MODULE_AUTHOR("Hans de Goede <hdegoede@redhat.com>");
+MODULE_LICENSE("GPL");    
+\end{mycode}
+
+一般来说，如果按键ok的话，会在设备启动的时候生成个/dev/input/event0节点，此时，如果编写一个应用程序，读写这些节点，就完全可以获取相关的按键信息。所以，我们还得准备一个input.c的读写程序，
+
+\begin{mycode}{input.c}
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <linux/input.h>
+#include <linux/input-event-codes.h>
+
+const char * path = "/dev/input/event0";
+
+int main(char argc,char *argv[])
+{
+    int ret;
+
+    int fd;
+    struct input_event event;
+
+    fd = open(path,O_RDONLY);
+    if(fd < 0)
+    {
+        perror(path);
+        exit(-1);
+    }
+
+    while(1)
+    {
+        ret = read(fd, &event, sizeof(struct input_event));
+        if(ret == sizeof(struct input_event))
+        {
+            if(event.type != EV_SYN)
+            {
+                printf("Event: time %ld.%ld,", event.time.tv_sec, event.time.tv_usec);
+                printf("type:%d,code:%d,value:%d\n", event.type,event.code, event.value);
+            }
+        }
+    }
+ 
+    close(fd);
+
+    return 0;
+}
+\end{mycode}
+
+准备好了程序之后，下面就是交叉编译，下载到开发板上面。但是实际运行的时候，发现按键被按下的时候，有三个按键的数值居然是一样的，都是352，另外一个是114。这就非常蹊跷了。
+
+\section{解决问题}
+
+查看sun4i-lradc-keys.c，惊讶地发现电压判断标准是根据sun8i-v3s-licheepi-zero-dock.dts中的voltage来验证的，这并不符合实际的情况。我们通过printk\&dmesg打印，也验证了这一想法，所以如果需要得到正确的按键数值，只需要修正一下sun4i-lradc-keys.c中的判断逻辑就可以了，修改方法如下，具体的标定数值可以做实验来解决，
+
+\begin{mycode}{修改程序}
+#if 0
+		voltage = val * lradc->vref / 63;
+
+		for (i = 0; i < lradc->chan0_map_count; i++) {
+			diff = abs(lradc->chan0_map[i].voltage - voltage);
+			if (diff < closest) {
+				closest = diff;
+				keycode = lradc->chan0_map[i].keycode;
+			}
+		}
+#else
+		printk("val = %d\n", val);
+		if(val >=9 && val <= 13)
+			keycode = lradc->chan0_map[0].keycode;
+		else if(val >=24 && val <= 29)
+			keycode = lradc->chan0_map[1].keycode;
+		else if(val >= 35 && val <= 40)
+			keycode = lradc->chan0_map[2].keycode;
+		else
+			keycode = lradc->chan0_map[3].keycode;
+#endif
+\end{mycode}
+
+经过这一次修改，我们重新编译kernel内核，烧入zImage，启动后输入key程序，这样就得到了我们想要的最终结果，即稳定地输出按键值。
 
 \end{document}
