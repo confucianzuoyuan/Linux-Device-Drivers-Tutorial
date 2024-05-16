@@ -1561,4 +1561,70 @@ echo 0 > /sys/class/pwm/pwmchip0/pwm0/enable
 
 使用逻辑分析仪来观察一下。
 
+\chapter{GPIO驱动示例}
+
+使用spi接口当成gpio口。
+
+有一个spi接口，之前主要是用作norflash访问使用的。现在因为所有系统都保存在sd卡里面，因此完全可以用这个当成gpio使用。
+
+修改sun8i-v3s.dtsi文件
+
+首先注释掉之前spi0\_pins这个部分，
+
+\begin{mycode}{修改设备树文件}
+/*spi0_pins: spi0 {
+    pins = "PC0", "PC1", "PC2", "PC3";
+    function = "spi0";
+};*/
+\end{mycode}
+
+接着注释掉spi0，
+
+\begin{mycode}{修改设备树文件}
+/*spi0: spi@1c68000 {
+    compatible = "allwinner,sun8i-h3-spi";
+    reg = <0x01c68000 0x1000>;
+    interrupts = <GIC_SPI 65 IRQ_TYPE_LEVEL_HIGH>;
+    clocks = <&ccu CLK_BUS_SPI0>, <&ccu CLK_SPI0>;
+    clock-names = "ahb", "mod";
+    pinctrl-names = "default";
+    pinctrl-0 = <&spi0_pins>;
+    resets = <&ccu RST_BUS_SPI0>;
+    status = "disabled";
+    #address-cells = <1>;
+    #size-cells = <0>;
+};*/
+\end{mycode}
+
+注释掉这两部分呢，重新编译成sun8i-v3s-licheepi-zero-dock.dtb文件就可以了。细心的同学也许会看到sun8i-v3s-licheepi-zero.dts和sun8i-v3s-licheepi-zero-dock.dts这两个文件中均有leds的配置，是不是status设置为okay就好了？要注意它们的状态都是写死的，后期不能通过命令和配置的方法来解决，虽然启动后也可以在/sys/kernel/debug/gpio下面看到映射关系，这个需要注意下。
+
+重启开发板
+
+重启开发板之后，首先需要查看一下端口使用情况，没有debug信息，先要mount debugfs系统，
+
+\begin{mycode}{shell}
+mount -t debugfs debugfs /sys/kernel/debug
+# 加载好了之后，就可以看看端口的使用情况了，
+cat /sys/kernel/debug/gpio
+\end{mycode}
+
+创建通道，开始设备外设
+
+看过上面一篇文章的同学，对于/sys/class/pwm里面的export不会陌生。但是pwm只有两个，分别是0和1，gpio这么多，我们怎么把这些pin和通道bind在一起呢？其实这里面是有规律的。首先我们找到一个pin，但不知道它的序号是多少，那可以先找到名称，比如SPI\_CS,接着看\Colorbox{lightgrey}{\lstinline{Allwinner_V3s_Datasheet_V1.0.pdf}}中的第54页，获取引脚名称，
+
+找到了这个信号叫PC2，下面就好办了。所有的端口一般都是$channel = 32 \times x+y$来实现的。PA、PB、PC...，这些代表$x$，分别是0、1、2...。而PC2中的2就代表$y$，如果是PB9，那么$y$就是9。所以对于PC2来说，$channel = 32 \times 2+ 2$，也就是66，就是这么简单。那么，刚才说的PB9呢，它的$channel = 32 \times 1 + 9$，应该就是41。
+
+说了这么多，下面开始实验，
+
+\begin{mycode}{shell}
+echo 66 > /sys/class/gpio/export
+echo out > /sys/class/gpio/gpio66/direction
+echo 1 > /sys/class/gpio/gpio66/value
+echo 0 > /sys/class/gpio/gpio66/value
+\end{mycode}
+
+四条命令依次解释下，第一条创建channel 66。第二条呢，设定chanel 66的方向为输出。第三条，设置高电平，与此相对的，第四条就是设置低电平。
+
+为了验证设置的电平是不是正确，一个靠谱的办法就是在spi\_cs处于高电平和低电平的时候都测量下，这样就知道电压有没有设置对了。
+
 \end{document}
