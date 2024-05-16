@@ -1235,6 +1235,41 @@ Target packages \textgreater Libraries \textgreater Crypto & openssl support    
 
 \section{写入SD卡}
 
+我的SD卡路径是/dev/sdb，可以通过sudo fdisk -l查看SD卡的路径。
+
+\begin{mycode}{将UBoot写入SD卡}
+cd partitions
+# 清空分区表
+sudo dd if=/dev/zero of=/dev/sdb bs=1M count=1
+# 写入U-Boot
+sudo dd if=u-boot-sunxi-with-spl.bin of=/dev/sdb bs=1024 seek=8
+\end{mycode}
+
+\begin{mycode}{将分区表写入SD卡}
+# 写入分区表，请复制除了本行内的内容并执行
+sudo blockdev --rereadpt /dev/sdb
+cat <<EOT | sudo sfdisk /dev/sdb
+1M,16M,c
+,,L
+EOT
+\end{mycode}
+
+\begin{mycode}{将内核和根文件系统写入SD卡}
+# 格式化
+sudo mkfs.vfat /dev/sdb1
+sudo mkfs.ext4 /dev/sdb2
+# 拷贝boot进入第一个分区
+sudo mount /dev/sdb1 /mnt
+sudo cp -R boot/* /mnt
+sync
+sudo umount /mnt
+# 拷贝rootfs进入第二个分区
+sudo mount /dev/sdb2 /mnt
+sudo cp -R root/* /mnt
+sync
+sudo umount /mnt
+\end{mycode}
+
 \section{将开发板作为ssh服务器来使用}
 
 连接串口，波特率设置为 115200 。
