@@ -1319,6 +1319,236 @@ atguigu-pi>wpa_supplicant -B -i wlan0 -c your_SSID.conf
 
 \part{驱动程序举例}
 
+\chapter{Linux Demo驱动程序开发}
+
+本文描述了基于全志V3S开发板的简单驱动程序和测试应用程序的设计流程。我们设计的驱动程序和测试程序极其简单，适合初学者上手学习。
+
+软件运行的硬件环境是基于V3S开发板中的全志V3S处理器，该处理器集成了一个1.2GHz工作主频的单ARM CortexTM-A7 核，芯片内部集成了64MB DRAM 存储器。
+
+设计流程概述
+
+\begin{enumerate}
+    \item 步骤一：编写一个\Colorbox{lightgrey}{\lstinline{demo_driver.c}}的驱动程序。
+    \item 步骤二：编写makefile文件。
+    \item 步骤三：编写一个\Colorbox{lightgrey}{\lstinline{demo_app.c}}的应用程序。
+    \item 步骤四：在V3S开发板中安装\Colorbox{lightgrey}{\lstinline{demo_driver}}驱动程序，并测试\Colorbox{lightgrey}{\lstinline{demo_app}}应用程序。
+\end{enumerate}
+
+linux系统是一个分层结构，我们设计的\Colorbox{lightgrey}{\lstinline{demo_driver}}位于内核中的驱动部分，\Colorbox{lightgrey}{\lstinline{demo_app}}位于用户级。
+
+\section{编写驱动程序}
+
+编写一个\Colorbox{lightgrey}{\lstinline{demo_driver.c}}的驱动程序，驱动程序源码如下：
+
+\begin{mycode}{demo\_driver.c}
+/**
+*********************************************************************************************************
+*                                        		demo_driver
+*                                      (c) Copyright 2021-2031
+*                                         All Rights Reserved
+*
+* @File    : 
+* @By      : liwei
+* @Version : V0.01
+* 
+*********************************************************************************************************
+**/
+
+/**********************************************************************************************************
+Includes 
+**********************************************************************************************************/
+#include <linux/module.h>
+#include <linux/kernel.h>
+#include <linux/fs.h>
+#include <linux/init.h>
+
+/**********************************************************************************************************
+Define
+**********************************************************************************************************/
+#define    DRIVER_MAJOR     188
+#define    DEVICE_NAME     "demo_driver"
+
+
+/***********************************************************************************************************
+* @描述	:  
+***********************************************************************************************************/
+static int demo_open(struct inode *inode, struct file *file)
+{	
+	printk(KERN_EMERG "======================demo_open======================\n");
+	return 0;
+}
+/***********************************************************************************************************
+* @描述	:  
+***********************************************************************************************************/
+static ssize_t demo_write(struct file *file, const char __user * buf, size_t count, loff_t *ppos)
+{
+    printk(KERN_EMERG "======================demo_write======================\n");
+    return 0;
+}
+/***********************************************************************************************************
+* @描述	:  
+***********************************************************************************************************/
+static ssize_t demo_read(struct file *file,  char __user * buf, size_t count, loff_t *ppos)
+{
+    printk(KERN_EMERG "======================demo_read ======================\n");  
+    return 0;
+}
+/***********************************************************************************************************
+* @描述	:  
+***********************************************************************************************************/
+static int demo_close(struct inode *inode, struct file *file)
+{
+    printk(KERN_EMERG "======================demo_close ======================\n");
+    return 0;
+}
+
+/***********************************************************************************************************
+* @描述	:  
+***********************************************************************************************************/
+static struct file_operations demo_flops = 
+{
+	.owner  =   THIS_MODULE,
+	.open   =   demo_open,     
+	.write  =   demo_write,
+	.read 	=  	demo_read,
+	.release =  demo_close,
+};
+
+/***********************************************************************************************************
+* @描述	:  
+***********************************************************************************************************/
+static int __init demo_init(void)
+{
+    int ret;
+ 		
+	//注册设备
+    ret = register_chrdev(DRIVER_MAJOR,DEVICE_NAME, &demo_flops);
+
+    if (ret < 0) 
+	{
+      printk(KERN_EMERG DEVICE_NAME " can't register major number.\n");
+      return ret;
+    }
+	else
+	{
+		printk(KERN_EMERG DEVICE_NAME " ======================demo init======================\n");
+	}
+
+    return 0;
+}
+/***********************************************************************************************************
+* @描述	:  
+***********************************************************************************************************/
+static void __exit demo_exit(void)
+{
+    unregister_chrdev(DRIVER_MAJOR, DEVICE_NAME);
+    printk(KERN_EMERG DEVICE_NAME " ======================demoexit======================\n");
+}
+
+
+module_init(demo_init);
+module_exit(demo_exit);
+MODULE_LICENSE("GPL");
+/***********************************************END*******************************************************/
+\end{mycode}
+
+编译驱动程序依赖linux内核源码环境，需要把驱动C文件放在linux源码目录中，通过编译linux内核的方式得到驱动ko文件。
+
+为了得到驱动ko，我们在linux/drivers/char目录下面创建一个demo\_driver的文件夹，并把demo\_driver.c程序拷贝到demo\_driver的文件夹中。
+
+\section{编写Makefile}
+
+我们通过编译linux内核的方式得到驱动ko文件，为了在编译内核时得到相应的驱动，我们需要在linux内核代码中增加和修改Makefile文件（Makefile的作用指定了工程编译的方法和步骤）。
+
+首先我们修改linux/drivers/char目录下Makefile文件，在Makefile文件内容最末行加入一行代码：
+
+\begin{mycode}{添加一行代码}
+obj += demo_driver/
+\end{mycode}
+
+这句代码的意思是：编译内核时，子目录demo\_driver/下的文件也将进行编译。
+
+我们在linux/drivers/char/demo\_driver中创建一个Makefile文件，同时在Makefile文件中加入一行代码：
+
+\begin{mycode}{Makefile}
+obj-m += demo_driver.o
+\end{mycode}
+
+这句代码的意思是：编译当前目录中的demo\_driver.c文件，输出一个demo\_driver.ko的驱动文件。
+
+准备好demo\_driver.c文件和Makefile文件后，我们执行编译内核指令。
+
+经过上述一波操作，我们得到了demo\_driver.ko的驱动文件。
+
+\section{编写应用程序}
+
+编写一个demo\_app.c的应用程序，程序源码如下：
+
+\begin{mycode}{demo\_app.c}
+/**
+*********************************************************************************************************
+*                                        		demo_driver
+*                                      (c) Copyright 2021-2031
+*                                         All Rights Reserved
+*
+* @File    : 
+* @By      : liwei
+* @Version : V0.01
+* 
+*********************************************************************************************************
+**/
+
+/**********************************************************************************************************
+Includes 
+**********************************************************************************************************/
+#include <stdio.h> 
+#include <string.h> 
+#include <stdlib.h>
+#include <sys/types.h>
+#include <sys/stat.h> 
+#include <fcntl.h> 
+#include <unistd.h>
+
+
+
+/***********************************************************************************************************
+* @描述	:  
+***********************************************************************************************************/
+int main(int arvc, char *argv[])
+{
+	int fd;
+	int value = 0;
+	printf("==========demo_test==================\n");
+	//打开驱动 
+	fd = open("/dev/demo_driver",O_RDWR);
+
+	while(1)
+	{
+		//执行驱动读操作
+		read(fd,&value,4);
+		sleep(1);
+		//执行驱动写操作
+		write(fd,&value,4);
+		sleep(1);	
+		
+		printf("==========run==================\n");
+	}
+	return 0;
+
+}
+/***********************************************END*******************************************************/
+\end{mycode}
+
+然后编译应用程序。
+
+\begin{mycode}{shell}
+arm-linux-gnueabihf-gcc -o demo_app demo_app.c
+\end{mycode}
+
+于是我们得到一个demo\_app可执行文件。
+
+
+
 \chapter{V3S按键驱动}
 
 我们的开发板上面，有5个按键本身不是通过gpio连接到soc上面的。它是通过adc的方法，连接到主芯片的。这个时候，不同的按键被按下的时候，就会生成不同的电压或者电流，那么完全可以根据对应的电信号，推算出当前是哪一个按键被按下去了。
