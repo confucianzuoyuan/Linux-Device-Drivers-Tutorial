@@ -759,7 +759,7 @@ dtc -I dtb -O dtsarch/arm/boot/dts imx6dl-sabrelite.dtb > path/to/my_devicetree.
 
 实际上,可寻址设备继承自它们父节点的\#size-cell和\#address-cell,父节点代表总线控制器。指定设备中存在\#size-cell和\#address-cell不会影响设备本身,但影响其子设备。换句话说,在解释给定节点的reg属性之前,必须知道父节点\#address-cells和\#size-cells的值。父节点可以自由定义适用于设备子节点(孩子)的寻址方案。
 
-\subsection{SPI和$I^2C$寻址}
+\subsection{SPI和\texorpdfstring{$I^2C$寻址}{I2C寻址}}
 
 SPI和$I^2C$设备都属于非内存映射设备,因为它们的地址对CPU不可访问。而父设备的驱动程序(总线控制器驱动程序)将代表CPU执行间接访问。每个$I^2C$/SPI设备都表示为设备所在$I^2C$/SPI总线节点的子节点。对于非存储器映射的设备,\#size-cells属性为0,寻址元组中的size元素为空。这意味着这种设备的reg属性总是只有一个单元:
 
@@ -953,7 +953,7 @@ if (IS_ERR(base))
 
 
 
-\chapter{$I^2C$客户端驱动程序}
+\chapter{\texorpdfstring{$I^2C$客户端驱动程序}{I2C客户端驱动程序}}
 
 由飞利浦（现为恩智浦）发明的$I^2C$总线是双线制：由串行数据（SDA）、串行时钟（SCL）构成的异步串行总线。它是多主总线，但多主模式未广泛使用。SDA和SCL都是漏极开路/集电极开路，这意味着它们都可以使输出驱动为低电平，但是如果没有上拉电阻，则都不能使输出驱动为高电平。SCL由主设备生成，以便在总线上同步数据（由SDA传送）传送。从机和主机都可以发送数据（当然不是同时），因此SDA是双向线路。这就是说SCL信号也是双向的，因为从机可以通过保持SCL线低电平来延长时钟。总线由主机控制，在这里的例子中它是SoC的一部分。该总线经常在嵌入式系统中，用于连接串行EEPROM、RTC芯片、GPIO扩展器、温度传感器等，如图7-1所示。
 
