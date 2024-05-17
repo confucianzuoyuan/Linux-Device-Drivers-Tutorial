@@ -1252,6 +1252,21 @@ Target packages \textgreater Libraries \textgreater Crypto & openssl support    
 \end{adjustbox}
 \end{table}
 
+执行以下命令
+
+\begin{mycode}{编译跟文件系统rootfs}
+# 编译，Buildroot不支持多线程编译，所以不携带-j
+make
+# 拷贝解压文件系统和内核模块
+cp output/images/rootfs.tar ../partitions/root
+cd ../partitions/root
+extract rootfs.tar
+mv rootfs/* ./
+rm -rf rootfs
+rm rootfs.tar
+cp -R ../../modules/* ./
+\end{mycode}
+
 同时修改partitions/root/etc/fstab文件中的ext2为ext4。
 
 \section{写入SD卡}
@@ -2455,5 +2470,9 @@ all:
 clean:
     make -C /lib/modules/$(shell uname -r)/build M=$(PWD) clean
 \end{mycode}
+
+\chapter{I2C驱动程序示例}
+
+
 
 \end{document}
