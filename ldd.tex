@@ -1547,7 +1547,38 @@ arm-linux-gnueabihf-gcc -o demo_app demo_app.c
 
 于是我们得到一个demo\_app可执行文件。
 
+然后将得到的两个二进制\Colorbox{lightgrey}{\lstinline{demo_driver.ko}}和\Colorbox{lightgrey}{\lstinline{demo_app}}拷贝到我们的嵌入式系统里面。
 
+安装驱动：
+
+\begin{mycode}{安装驱动}
+    $ insmod demo_driver.ko
+    # 执行创建文件节点指令
+    $ mknod /dev/demo_driver c 188 0
+    # 查看驱动设备
+    $ ls /dev
+\end{mycode}
+
+188的是设备号，我们在设计的驱动C文件中有如下定义：
+
+\begin{mycode}{设备号定义}
+/**********************************************************************************************************
+Define
+**********************************************************************************************************/
+#define    DRIVER_MAJOR     188
+#define    DEVICE_NAME     "demo_driver"
+\end{mycode}
+
+执行\Colorbox{lightgrey}{\lstinline{demo_app}}程序：
+
+\begin{mycode}{执行程序}
+$ chmod 777 demo_app
+$ ./demo_app
+\end{mycode}
+
+\begin{marker}
+    如果重启设备，则需要重新加载驱动。
+\end{marker}
 
 \chapter{V3S按键驱动}
 
