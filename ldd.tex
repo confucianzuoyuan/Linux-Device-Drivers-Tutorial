@@ -1341,115 +1341,75 @@ linux系统是一个分层结构，我们设计的\Colorbox{lightgrey}{\lstinlin
 编写一个\Colorbox{lightgrey}{\lstinline{demo_driver.c}}的驱动程序，驱动程序源码如下：
 
 \begin{mycode}{demo\_driver.c}
-/**
-*********************************************************************************************************
-*                                        		demo_driver
-*                                      (c) Copyright 2021-2031
-*                                         All Rights Reserved
-*
-* @File    : 
-* @By      : liwei
-* @Version : V0.01
-* 
-*********************************************************************************************************
-**/
-
-/**********************************************************************************************************
-Includes 
-**********************************************************************************************************/
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/fs.h>
 #include <linux/init.h>
 
-/**********************************************************************************************************
-Define
-**********************************************************************************************************/
 #define    DRIVER_MAJOR     188
 #define    DEVICE_NAME     "demo_driver"
 
-
-/***********************************************************************************************************
-* @描述	:  
-***********************************************************************************************************/
 static int demo_open(struct inode *inode, struct file *file)
-{	
-	printk(KERN_EMERG "======================demo_open======================\n");
-	return 0;
+{    
+    printk(KERN_EMERG "open\n");
+    return 0;
 }
-/***********************************************************************************************************
-* @描述	:  
-***********************************************************************************************************/
+
 static ssize_t demo_write(struct file *file, const char __user * buf, size_t count, loff_t *ppos)
 {
-    printk(KERN_EMERG "======================demo_write======================\n");
+    printk(KERN_EMERG "write\n");
     return 0;
 }
-/***********************************************************************************************************
-* @描述	:  
-***********************************************************************************************************/
 static ssize_t demo_read(struct file *file,  char __user * buf, size_t count, loff_t *ppos)
 {
-    printk(KERN_EMERG "======================demo_read ======================\n");  
+    printk(KERN_EMERG "read\n");  
     return 0;
 }
-/***********************************************************************************************************
-* @描述	:  
-***********************************************************************************************************/
+
 static int demo_close(struct inode *inode, struct file *file)
 {
-    printk(KERN_EMERG "======================demo_close ======================\n");
+    printk(KERN_EMERG "close\n");
     return 0;
 }
 
-/***********************************************************************************************************
-* @描述	:  
-***********************************************************************************************************/
 static struct file_operations demo_flops = 
 {
-	.owner  =   THIS_MODULE,
-	.open   =   demo_open,     
-	.write  =   demo_write,
-	.read 	=  	demo_read,
-	.release =  demo_close,
+    .owner  =   THIS_MODULE,
+    .open   =   demo_open,     
+    .write  =   demo_write,
+    .read     =      demo_read,
+    .release =  demo_close,
 };
 
-/***********************************************************************************************************
-* @描述	:  
-***********************************************************************************************************/
 static int __init demo_init(void)
 {
     int ret;
- 		
-	//注册设备
+         
+    //注册设备
     ret = register_chrdev(DRIVER_MAJOR,DEVICE_NAME, &demo_flops);
 
     if (ret < 0) 
-	{
+    {
       printk(KERN_EMERG DEVICE_NAME " can't register major number.\n");
       return ret;
     }
-	else
-	{
-		printk(KERN_EMERG DEVICE_NAME " ======================demo init======================\n");
-	}
+    else
+    {
+        printk(KERN_EMERG DEVICE_NAME "demo init\n");
+    }
 
     return 0;
 }
-/***********************************************************************************************************
-* @描述	:  
-***********************************************************************************************************/
+
 static void __exit demo_exit(void)
 {
     unregister_chrdev(DRIVER_MAJOR, DEVICE_NAME);
-    printk(KERN_EMERG DEVICE_NAME " ======================demoexit======================\n");
+    printk(KERN_EMERG DEVICE_NAME "demo exit\n");
 }
-
 
 module_init(demo_init);
 module_exit(demo_exit);
 MODULE_LICENSE("GPL");
-/***********************************************END*******************************************************/
 \end{mycode}
 
 编译驱动程序依赖linux内核源码环境，需要把驱动C文件放在linux源码目录中，通过编译linux内核的方式得到驱动ko文件。
@@ -1485,22 +1445,6 @@ obj-m += demo_driver.o
 编写一个demo\_app.c的应用程序，程序源码如下：
 
 \begin{mycode}{demo\_app.c}
-/**
-*********************************************************************************************************
-*                                        		demo_driver
-*                                      (c) Copyright 2021-2031
-*                                         All Rights Reserved
-*
-* @File    : 
-* @By      : liwei
-* @Version : V0.01
-* 
-*********************************************************************************************************
-**/
-
-/**********************************************************************************************************
-Includes 
-**********************************************************************************************************/
 #include <stdio.h> 
 #include <string.h> 
 #include <stdlib.h>
@@ -1509,34 +1453,28 @@ Includes
 #include <fcntl.h> 
 #include <unistd.h>
 
-
-
-/***********************************************************************************************************
-* @描述	:  
-***********************************************************************************************************/
 int main(int arvc, char *argv[])
 {
-	int fd;
-	int value = 0;
-	printf("==========demo_test==================\n");
-	//打开驱动 
-	fd = open("/dev/demo_driver",O_RDWR);
+    int fd;
+    int value = 0;
+    printf("demo test\n");
 
-	while(1)
-	{
-		//执行驱动读操作
-		read(fd,&value,4);
-		sleep(1);
-		//执行驱动写操作
-		write(fd,&value,4);
-		sleep(1);	
-		
-		printf("==========run==================\n");
-	}
-	return 0;
+    /// 打开驱动
+    fd = open("/dev/demo_driver", O_RDWR);
 
+    while(1)
+    {
+        /// 执行驱动读操作
+        read(fd, &value, 4);
+        sleep(1);
+        /// 执行驱动写操作
+        write(fd, &value, 4);
+        sleep(1);    
+        
+        printf("demo run\n");
+    }
+    return 0;
 }
-/***********************************************END*******************************************************/
 \end{mycode}
 
 然后编译应用程序。
@@ -1592,36 +1530,36 @@ $ ./demo_app
 
 \begin{mycode}{设备树}
 &lradc {
-	vref-supply = <&reg_vcc3v0>;
-	status = "okay";
+    vref-supply = <&reg_vcc3v0>;
+    status = "okay";
  
-	button@200 {
-		label = "Volume Up";
-		linux,code = <KEY_VOLUMEUP>;
-		channel = <0>;
-		voltage = <200000>;
-	};
+    button@200 {
+        label = "Volume Up";
+        linux,code = <KEY_VOLUMEUP>;
+        channel = <0>;
+        voltage = <200000>;
+    };
  
-	button@400 {
-		label = "Volume Down";
-		linux,code = <KEY_VOLUMEDOWN>;
-		channel = <0>;
-		voltage = <400000>;
-	};
+    button@400 {
+        label = "Volume Down";
+        linux,code = <KEY_VOLUMEDOWN>;
+        channel = <0>;
+        voltage = <400000>;
+    };
  
-	button@600 {
-		label = "Select";
-		linux,code = <KEY_SELECT>;
-		channel = <0>;
-		voltage = <600000>;
-	};
+    button@600 {
+        label = "Select";
+        linux,code = <KEY_SELECT>;
+        channel = <0>;
+        voltage = <600000>;
+    };
  
-	button@800 {
-		label = "Start";
-		linux,code = <KEY_OK>;
-		channel = <0>;
-		voltage = <800000>;
-	};
+    button@800 {
+        label = "Start";
+        linux,code = <KEY_OK>;
+        channel = <0>;
+        voltage = <800000>;
+    };
 };
 \end{mycode}
 
@@ -1651,10 +1589,10 @@ MODULE_DEVICE_TABLE(of, sun4i_lradc_of_match);
 
 static struct platform_driver sun4i_lradc_driver = {
     .driver = {
-        .name	= "sun4i-a10-lradc-keys",
+        .name    = "sun4i-a10-lradc-keys",
         .of_match_table = of_match_ptr(sun4i_lradc_of_match),
     },
-    .probe	= sun4i_lradc_probe,
+    .probe    = sun4i_lradc_probe,
 };
 
 module_platform_driver(sun4i_lradc_driver);
@@ -1721,25 +1659,25 @@ int main(char argc,char *argv[])
 
 \begin{mycode}{修改程序}
 #if 0
-		voltage = val * lradc->vref / 63;
+        voltage = val * lradc->vref / 63;
 
-		for (i = 0; i < lradc->chan0_map_count; i++) {
-			diff = abs(lradc->chan0_map[i].voltage - voltage);
-			if (diff < closest) {
-				closest = diff;
-				keycode = lradc->chan0_map[i].keycode;
-			}
-		}
+        for (i = 0; i < lradc->chan0_map_count; i++) {
+            diff = abs(lradc->chan0_map[i].voltage - voltage);
+            if (diff < closest) {
+                closest = diff;
+                keycode = lradc->chan0_map[i].keycode;
+            }
+        }
 #else
-		printk("val = %d\n", val);
-		if(val >=9 && val <= 13)
-			keycode = lradc->chan0_map[0].keycode;
-		else if(val >=24 && val <= 29)
-			keycode = lradc->chan0_map[1].keycode;
-		else if(val >= 35 && val <= 40)
-			keycode = lradc->chan0_map[2].keycode;
-		else
-			keycode = lradc->chan0_map[3].keycode;
+        printk("val = %d\n", val);
+        if(val >=9 && val <= 13)
+            keycode = lradc->chan0_map[0].keycode;
+        else if(val >=24 && val <= 29)
+            keycode = lradc->chan0_map[1].keycode;
+        else if(val >= 35 && val <= 40)
+            keycode = lradc->chan0_map[2].keycode;
+        else
+            keycode = lradc->chan0_map[3].keycode;
 #endif
 \end{mycode}
 
