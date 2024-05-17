@@ -406,7 +406,11 @@ CONFIG_MODULES=y
 
 Linux内核中的模块可以提供函数或变量，用EXPORT\_SYMBOL宏导出它们即可供其他模块使用，这些被称作符号。模块B对模块A的依赖是指模块B使用从模块A导出的符号。
 
-在内核构建过程中运行depmod工具可以生成模块依赖文件。它读取\Colorbox{lightgrey}{\lstinline{/lib/modules/<kernel_release>/}}中的每个模块来确定它应该导出哪些符号以及它需要什么符号。该处理的结果写入文件modules.dep及其二进制版本modules.dep.bin。它是一种模块索引。
+在内核构建过程中运行depmod工具可以生成模块依赖文件。
+
+它读取\Colorbox{lightgrey}{\lstinline{/lib/modules/<kernel_release>/}}中的每个模块来确定它应该导出哪些符号以及它需要什么符号。
+
+该处理的结果写入文件modules.dep及其二进制版本modules.dep.bin。它是一种模块索引。
 
 \subsection{模块的加载和卸载}
 
@@ -451,7 +455,9 @@ Linux内核中的模块可以提供函数或变量，用EXPORT\_SYMBOL宏导出�
 
     \item 自动加载
     
-    depmod实用程序的作用不只是构建modules.dep和modules.dep.bin文件。内核开发人员实际编写驱动程序时已经确切知道该驱动程序将要支持的硬件。他们把驱动程序支持的所有设备的产品和厂商ID提供给该驱动程序。depmod还处理模块文件以提取和收集该信息，并在/lib/modules/<kernel\_release>/modules.alias中生成modules.alias文件，该文件将设备映射到其对应的驱动程序。
+    depmod实用程序的作用不只是构建modules.dep和modules.dep.bin文件。内核开发人员实际编写驱动程序时已经确切知道该驱动程序将要支持的硬件。他们把驱动程序支持的所有设备的产品和厂商ID提供给该驱动程序。
+    
+    depmod还处理模块文件以提取和收集该信息，并在/lib/modules/<kernel\_release>/modules.alias中生成modules.alias文件，该文件将设备映射到其对应的驱动程序。
 
     下面的内容摘自modules.alias：
 
@@ -1420,7 +1426,9 @@ MODULE_LICENSE("GPL");
 
 编译驱动程序依赖linux内核源码环境，需要把驱动C文件放在linux源码目录中，通过编译linux内核的方式得到驱动ko文件。
 
-为了得到驱动ko，我们在linux/drivers/char目录下面创建一个demo\_driver的文件夹，并把demo\_driver.c程序拷贝到demo\_driver的文件夹中。
+为了得到驱动ko，我们在linux/drivers/char目录下面创建一个demo\_driver的文件夹。
+
+然后把demo\_driver.c程序拷贝到demo\_driver的文件夹中。
 
 \section{编写Makefile}
 
