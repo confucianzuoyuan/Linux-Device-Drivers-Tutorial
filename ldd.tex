@@ -1697,83 +1697,6 @@ int main(char argc,char *argv[])
 
 经过这一次修改，我们重新编译kernel内核，烧入zImage，启动后输入key程序，这样就得到了我们想要的最终结果，即稳定地输出按键值。
 
-\chapter{PWM驱动示例-1}
-
-要使能pwm功能，最主要就是修改设备树配置文件，
-
-第一，在sun8i-v3s.dtsi中，添加pwm0和pwm1节点，
-
-\begin{mycode}{pwm设备树}
-pwm0_pins: pwm0 {
-    pins = "PB4";
-    function = "pwm0";
-};
-
-pwm1_pins: pwm1 {
-    pins = "PB5";
-    function = "pwm1";
-};
-\end{mycode}
-
-第二，在sun8i-v3s-licheepi-zero.dts中使能pwm，
-
-\begin{mycode}{使能pwm}
-&pwm {
-    pinctrl-names = "default";
-    pinctrl-0 = <&pwm0_pins>, <&pwm1_pins>;
-    status = "okay";
-};
-\end{mycode}
-
-修改了这两个文件，下面要做的就是把他们编译成dtb，下载到sd卡里面，等待重启即可。注意，拷贝的dtb文件是un8i-v3s-licheepi-zero-dock.dtb。
-
-如果对驱动代码有兴趣，可以通过sun8i-v3s-pwm这个关键字去查找一下。查找后发现，相关的驱动文件名是drivers/pwm/pwm-sun4i.c。
-
-此外，之前这份驱动已经包含在了zImage里面，所以不需要重新编译内核。
-
-前面如果大家做过实验，就可以发现，如果我们没有修改设备树文件，那么发现在/sys/class/pwm节点下什么也没有。但是修改了之后，就会发现/sys/class/pwm一下子多了很多的内容，
-
-\begin{mycode}{显示内容}
-# cd /sys/class
-# cd pwm/
-# ls
-pwmchip0
-# cd pwmchip0/
-# ls
-device     export     npwm       power      subsystem  uevent     unexport
-# ls -l
-total 0
-lrwxrwxrwx    1 root     root             0 Jan  1 00:31 device -> ../../../1c21400.pwm
---w-------    1 root     root          4096 Jan  1 00:31 export
--r--r--r--    1 root     root          4096 Jan  1 00:31 npwm
-drwxr-xr-x    2 root     root             0 Jan  1 00:31 power
-lrwxrwxrwx    1 root     root             0 Jan  1 00:31 subsystem -> ../../../../../../class/pwm
--rw-r--r--    1 root     root          4096 Jan  1 00:31 uevent
---w-------    1 root     root          4096 Jan  1 00:31 unexport
-\end{mycode}
-
-首先，我们可以通过export来使能通道，输入0就可以创建通道0，输入1就可以创建通道1，根据具体情况而定。
-
-\begin{mycode}{举例}
-echo 0 > /sys/class/pwm/pwmchip0/export
-# 通道创建好了，就可以进入到通道里面，看看有哪些配置。以通道0为例，
-cd pwm0
-ls
-\end{mycode}
-
-简单来说，可以通过三个数值就可以实现最基本的pwm功能。其中period代表频率，duty\_cycle代表空占比，enable代表使能开关，
-
-\begin{mycode}{设置pwm波的参数}
-echo 1000000 > /sys/class/pwm/pwmchip0/pwm0/period
-echo 500000 > /sys/class/pwm/pwmchip0/pwm0/duty_cycle
-echo 1 > /sys/class/pwm/pwmchip0/pwm0/enable
-echo 0 > /sys/class/pwm/pwmchip0/pwm0/enable
-\end{mycode}
-
-假设cpu频率是1GHz，而我们希望得到的pwm频率是1000，那么这里的period就是1G/1000，而duty\_cycle被设置成了500000，代表空占比是50\%，enable为1代表打开，0则代表关闭。通道1也是这个道理，用同样的方法配置一下即可。
-
-使用逻辑分析仪来观察一下。
-
 \chapter{GPIO驱动示例-1}
 
 使用spi接口当成gpio口。
@@ -1867,166 +1790,166 @@ static struct cdev my_device;
  * @brief 将数据从缓冲区中读出
  */
 static ssize_t driver_read(struct file *File, char *user_buffer, size_t count, loff_t *offs) {
-	int to_copy, not_copied, delta;
-	char tmp[3] = " \n";
+    int to_copy, not_copied, delta;
+    char tmp[3] = " \n";
 
-	/* Get amount of data to copy */
-	to_copy = min(count, sizeof(tmp));
+    /* Get amount of data to copy */
+    to_copy = min(count, sizeof(tmp));
 
-	/* Read value of button */
-	printk("Value of button: %d\n", gpio_get_value(17));
-	tmp[0] = gpio_get_value(17) + '0';
+    /* Read value of button */
+    printk("Value of button: %d\n", gpio_get_value(17));
+    tmp[0] = gpio_get_value(17) + '0';
 
-	/* Copy data to user */
-	not_copied = copy_to_user(user_buffer, &tmp, to_copy);
+    /* Copy data to user */
+    not_copied = copy_to_user(user_buffer, &tmp, to_copy);
 
-	/* Calculate data */
-	delta = to_copy - not_copied;
+    /* Calculate data */
+    delta = to_copy - not_copied;
 
-	return delta;
+    return delta;
 }
 
 /**
  * @brief 将数据写入缓冲区
  */
 static ssize_t driver_write(struct file *File, const char *user_buffer, size_t count, loff_t *offs) {
-	int to_copy, not_copied, delta;
-	char value;
+    int to_copy, not_copied, delta;
+    char value;
 
-	/* Get amount of data to copy */
-	to_copy = min(count, sizeof(value));
+    /* Get amount of data to copy */
+    to_copy = min(count, sizeof(value));
 
-	/* Copy data to user */
-	not_copied = copy_from_user(&value, user_buffer, to_copy);
+    /* Copy data to user */
+    not_copied = copy_from_user(&value, user_buffer, to_copy);
 
-	/* Setting the LED */
-	switch(value) {
-		case '0':
-			gpio_set_value(4, 0);
-			break;
-		case '1':
-			gpio_set_value(4, 1);
-			break;
-		default:
-			printk("Invalid Input!\n");
-			break;
-	}
+    /* Setting the LED */
+    switch(value) {
+        case '0':
+            gpio_set_value(4, 0);
+            break;
+        case '1':
+            gpio_set_value(4, 1);
+            break;
+        default:
+            printk("Invalid Input!\n");
+            break;
+    }
 
-	/* Calculate data */
-	delta = to_copy - not_copied;
+    /* Calculate data */
+    delta = to_copy - not_copied;
 
-	return delta;
+    return delta;
 }
 
 /**
  * @brief 当设备文件打开时，调用这个函数
  */
 static int driver_open(struct inode *device_file, struct file *instance) {
-	printk("dev_nr - open was called!\n");
-	return 0;
+    printk("dev_nr - open was called!\n");
+    return 0;
 }
 
 /**
  * @brief 当设备文件关闭时，调用这个函数
  */
 static int driver_close(struct inode *device_file, struct file *instance) {
-	printk("dev_nr - close was called!\n");
-	return 0;
+    printk("dev_nr - close was called!\n");
+    return 0;
 }
 
 static struct file_operations fops = {
-	.owner = THIS_MODULE,
-	.open = driver_open,
-	.release = driver_close,
-	.read = driver_read,
-	.write = driver_write
+    .owner = THIS_MODULE,
+    .open = driver_open,
+    .release = driver_close,
+    .read = driver_read,
+    .write = driver_write
 };
 
 /**
  * @brief 当模块加载进内核时，调用这个函数
  */
 static int __init ModuleInit(void) {
-	printk("Hello, Kernel!\n");
+    printk("Hello, Kernel!\n");
 
-	/* Allocate a device nr */
-	if( alloc_chrdev_region(&my_device_nr, 0, 1, DRIVER_NAME) < 0) {
-		printk("Device Nr. could not be allocated!\n");
-		return -1;
-	}
-	printk("read_write - Device Nr. Major: %d, Minor: %d was registered!\n", my_device_nr >> 20, my_device_nr && 0xfffff);
+    /* Allocate a device nr */
+    if( alloc_chrdev_region(&my_device_nr, 0, 1, DRIVER_NAME) < 0) {
+        printk("Device Nr. could not be allocated!\n");
+        return -1;
+    }
+    printk("read_write - Device Nr. Major: %d, Minor: %d was registered!\n", my_device_nr >> 20, my_device_nr && 0xfffff);
 
-	/* 创建设备类 */
-	if((my_class = class_create(THIS_MODULE, DRIVER_CLASS)) == NULL) {
-		printk("Device class can not be created!\n");
-		goto ClassError;
-	}
+    /* 创建设备类 */
+    if((my_class = class_create(THIS_MODULE, DRIVER_CLASS)) == NULL) {
+        printk("Device class can not be created!\n");
+        goto ClassError;
+    }
 
-	/* 创建设备文件 */
-	if(device_create(my_class, NULL, my_device_nr, NULL, DRIVER_NAME) == NULL) {
-		printk("Can not create device file!\n");
-		goto FileError;
-	}
+    /* 创建设备文件 */
+    if(device_create(my_class, NULL, my_device_nr, NULL, DRIVER_NAME) == NULL) {
+        printk("Can not create device file!\n");
+        goto FileError;
+    }
 
-	/* 初始化设备文件 */
-	cdev_init(&my_device, &fops);
+    /* 初始化设备文件 */
+    cdev_init(&my_device, &fops);
 
-	/* 将设备注册到内核 */
-	if(cdev_add(&my_device, my_device_nr, 1) == -1) {
-		printk("Registering of device to kernel failed!\n");
-		goto AddError;
-	}
+    /* 将设备注册到内核 */
+    if(cdev_add(&my_device, my_device_nr, 1) == -1) {
+        printk("Registering of device to kernel failed!\n");
+        goto AddError;
+    }
 
-	/* GPIO 4 init */
-	if(gpio_request(4, "rpi-gpio-4")) {
-		printk("Can not allocate GPIO 4\n");
-		goto AddError;
-	}
+    /* GPIO 4 init */
+    if(gpio_request(4, "rpi-gpio-4")) {
+        printk("Can not allocate GPIO 4\n");
+        goto AddError;
+    }
 
-	/* Set GPIO 4 direction */
-	if(gpio_direction_output(4, 0)) {
-		printk("Can not set GPIO 4 to output!\n");
-		goto Gpio4Error;
-	}
+    /* Set GPIO 4 direction */
+    if(gpio_direction_output(4, 0)) {
+        printk("Can not set GPIO 4 to output!\n");
+        goto Gpio4Error;
+    }
 
-	/* GPIO 17 init */
-	if(gpio_request(17, "rpi-gpio-17")) {
-		printk("Can not allocate GPIO 17\n");
-		goto Gpio4Error;
-	}
+    /* GPIO 17 init */
+    if(gpio_request(17, "rpi-gpio-17")) {
+        printk("Can not allocate GPIO 17\n");
+        goto Gpio4Error;
+    }
 
-	/* Set GPIO 17 direction */
-	if(gpio_direction_input(17)) {
-		printk("Can not set GPIO 17 to input!\n");
-		goto Gpio17Error;
-	}
+    /* Set GPIO 17 direction */
+    if(gpio_direction_input(17)) {
+        printk("Can not set GPIO 17 to input!\n");
+        goto Gpio17Error;
+    }
 
 
-	return 0;
+    return 0;
 Gpio17Error:
-	gpio_free(17);
+    gpio_free(17);
 Gpio4Error:
-	gpio_free(4);
+    gpio_free(4);
 AddError:
-	device_destroy(my_class, my_device_nr);
+    device_destroy(my_class, my_device_nr);
 FileError:
-	class_destroy(my_class);
+    class_destroy(my_class);
 ClassError:
-	unregister_chrdev_region(my_device_nr, 1);
-	return -1;
+    unregister_chrdev_region(my_device_nr, 1);
+    return -1;
 }
 
 /**
  * @brief 当模块从内核中移除时，调用这个函数
  */
 static void __exit ModuleExit(void) {
-	gpio_set_value(4, 0);
-	gpio_free(17);
-	gpio_free(4);
-	cdev_del(&my_device);
-	device_destroy(my_class, my_device_nr);
-	class_destroy(my_class);
-	unregister_chrdev_region(my_device_nr, 1);
-	printk("Goodbye, Kernel\n");
+    gpio_set_value(4, 0);
+    gpio_free(17);
+    gpio_free(4);
+    cdev_del(&my_device);
+    device_destroy(my_class, my_device_nr);
+    class_destroy(my_class);
+    unregister_chrdev_region(my_device_nr, 1);
+    printk("Goodbye, Kernel\n");
 }
 
 module_init(ModuleInit);
@@ -2039,11 +1962,88 @@ Makefile文件如下
 obj-m += gpio_driver.o
 
 all:
-	make -C /lib/modules/$(shell uname -r)/build M=$(PWD) modules
+    make -C /lib/modules/$(shell uname -r)/build M=$(PWD) modules
 
 clean:
-	make -C /lib/modules/$(shell uname -r)/build M=$(PWD) clean
+    make -C /lib/modules/$(shell uname -r)/build M=$(PWD) clean
 \end{mycode}
+
+\chapter{PWM驱动示例-1}
+
+要使能pwm功能，最主要就是修改设备树配置文件，
+
+第一，在sun8i-v3s.dtsi中，添加pwm0和pwm1节点，
+
+\begin{mycode}{pwm设备树}
+pwm0_pins: pwm0 {
+    pins = "PB4";
+    function = "pwm0";
+};
+
+pwm1_pins: pwm1 {
+    pins = "PB5";
+    function = "pwm1";
+};
+\end{mycode}
+
+第二，在sun8i-v3s-licheepi-zero.dts中使能pwm，
+
+\begin{mycode}{使能pwm}
+&pwm {
+    pinctrl-names = "default";
+    pinctrl-0 = <&pwm0_pins>, <&pwm1_pins>;
+    status = "okay";
+};
+\end{mycode}
+
+修改了这两个文件，下面要做的就是把他们编译成dtb，下载到sd卡里面，等待重启即可。注意，拷贝的dtb文件是un8i-v3s-licheepi-zero-dock.dtb。
+
+如果对驱动代码有兴趣，可以通过sun8i-v3s-pwm这个关键字去查找一下。查找后发现，相关的驱动文件名是drivers/pwm/pwm-sun4i.c。
+
+此外，之前这份驱动已经包含在了zImage里面，所以不需要重新编译内核。
+
+前面如果大家做过实验，就可以发现，如果我们没有修改设备树文件，那么发现在/sys/class/pwm节点下什么也没有。但是修改了之后，就会发现/sys/class/pwm一下子多了很多的内容，
+
+\begin{mycode}{显示内容}
+# cd /sys/class
+# cd pwm/
+# ls
+pwmchip0
+# cd pwmchip0/
+# ls
+device     export     npwm       power      subsystem  uevent     unexport
+# ls -l
+total 0
+lrwxrwxrwx    1 root     root             0 Jan  1 00:31 device -> ../../../1c21400.pwm
+--w-------    1 root     root          4096 Jan  1 00:31 export
+-r--r--r--    1 root     root          4096 Jan  1 00:31 npwm
+drwxr-xr-x    2 root     root             0 Jan  1 00:31 power
+lrwxrwxrwx    1 root     root             0 Jan  1 00:31 subsystem -> ../../../../../../class/pwm
+-rw-r--r--    1 root     root          4096 Jan  1 00:31 uevent
+--w-------    1 root     root          4096 Jan  1 00:31 unexport
+\end{mycode}
+
+首先，我们可以通过export来使能通道，输入0就可以创建通道0，输入1就可以创建通道1，根据具体情况而定。
+
+\begin{mycode}{举例}
+echo 0 > /sys/class/pwm/pwmchip0/export
+# 通道创建好了，就可以进入到通道里面，看看有哪些配置。以通道0为例，
+cd pwm0
+ls
+\end{mycode}
+
+简单来说，可以通过三个数值就可以实现最基本的pwm功能。其中period代表频率，duty\_cycle代表空占比，enable代表使能开关，
+
+\begin{mycode}{设置pwm波的参数}
+echo 1000000 > /sys/class/pwm/pwmchip0/pwm0/period
+echo 500000 > /sys/class/pwm/pwmchip0/pwm0/duty_cycle
+echo 1 > /sys/class/pwm/pwmchip0/pwm0/enable
+echo 0 > /sys/class/pwm/pwmchip0/pwm0/enable
+\end{mycode}
+
+假设cpu频率是1GHz，而我们希望得到的pwm频率是1000，那么这里的period就是1G/1000，而duty\_cycle被设置成了500000，代表空占比是50\%，enable为1代表打开，0则代表关闭。通道1也是这个道理，用同样的方法配置一下即可。
+
+使用逻辑分析仪来观察一下。
 
 \chapter{PWM驱动示例-2}
 
@@ -2078,114 +2078,114 @@ u32 pwm_on_time = 500000000;
  * @brief Write data to buffer
  */
 static ssize_t driver_write(struct file *File, const char *user_buffer, size_t count, loff_t *offs) {
-	int to_copy, not_copied, delta;
-	char value;
+    int to_copy, not_copied, delta;
+    char value;
 
-	/* Get amount of data to copy */
-	to_copy = min(count, sizeof(value));
+    /* Get amount of data to copy */
+    to_copy = min(count, sizeof(value));
 
-	/* Copy data to user */
-	not_copied = copy_from_user(&value, user_buffer, to_copy);
+    /* Copy data to user */
+    not_copied = copy_from_user(&value, user_buffer, to_copy);
 
-	/* Set PWM on time */
-	if(value < 'a' || value > 'j')
-		printk("Invalid Value\n");
-	else
-		pwm_config(pwm0, 100000000 * (value - 'a'), 1000000000);
+    /* Set PWM on time */
+    if(value < 'a' || value > 'j')
+        printk("Invalid Value\n");
+    else
+        pwm_config(pwm0, 100000000 * (value - 'a'), 1000000000);
 
-	/* Calculate data */
-	delta = to_copy - not_copied;
+    /* Calculate data */
+    delta = to_copy - not_copied;
 
-	return delta;
+    return delta;
 }
 
 /**
  * @brief This function is called, when the device file is opened
  */
 static int driver_open(struct inode *device_file, struct file *instance) {
-	printk("dev_nr - open was called!\n");
-	return 0;
+    printk("dev_nr - open was called!\n");
+    return 0;
 }
 
 /**
  * @brief This function is called, when the device file is opened
  */
 static int driver_close(struct inode *device_file, struct file *instance) {
-	printk("dev_nr - close was called!\n");
-	return 0;
+    printk("dev_nr - close was called!\n");
+    return 0;
 }
 
 static struct file_operations fops = {
-	.owner = THIS_MODULE,
-	.open = driver_open,
-	.release = driver_close,
-	.write = driver_write
+    .owner = THIS_MODULE,
+    .open = driver_open,
+    .release = driver_close,
+    .write = driver_write
 };
 
 /**
  * @brief This function is called, when the module is loaded into the kernel
  */
 static int __init ModuleInit(void) {
-	printk("Hello, Kernel!\n");
+    printk("Hello, Kernel!\n");
 
-	/* Allocate a device nr */
-	if( alloc_chrdev_region(&my_device_nr, 0, 1, DRIVER_NAME) < 0) {
-		printk("Device Nr. could not be allocated!\n");
-		return -1;
-	}
-	printk("read_write - Device Nr. Major: %d, Minor: %d was registered!\n", my_device_nr >> 20, my_device_nr && 0xfffff);
+    /* Allocate a device nr */
+    if( alloc_chrdev_region(&my_device_nr, 0, 1, DRIVER_NAME) < 0) {
+        printk("Device Nr. could not be allocated!\n");
+        return -1;
+    }
+    printk("read_write - Device Nr. Major: %d, Minor: %d was registered!\n", my_device_nr >> 20, my_device_nr && 0xfffff);
 
-	/* Create device class */
-	if((my_class = class_create(THIS_MODULE, DRIVER_CLASS)) == NULL) {
-		printk("Device class can not be created!\n");
-		goto ClassError;
-	}
+    /* Create device class */
+    if((my_class = class_create(THIS_MODULE, DRIVER_CLASS)) == NULL) {
+        printk("Device class can not be created!\n");
+        goto ClassError;
+    }
 
-	/* create device file */
-	if(device_create(my_class, NULL, my_device_nr, NULL, DRIVER_NAME) == NULL) {
-		printk("Can not create device file!\n");
-		goto FileError;
-	}
+    /* create device file */
+    if(device_create(my_class, NULL, my_device_nr, NULL, DRIVER_NAME) == NULL) {
+        printk("Can not create device file!\n");
+        goto FileError;
+    }
 
-	/* Initialize device file */
-	cdev_init(&my_device, &fops);
+    /* Initialize device file */
+    cdev_init(&my_device, &fops);
 
-	/* Regisering device to kernel */
-	if(cdev_add(&my_device, my_device_nr, 1) == -1) {
-		printk("Registering of device to kernel failed!\n");
-		goto AddError;
-	}
+    /* Regisering device to kernel */
+    if(cdev_add(&my_device, my_device_nr, 1) == -1) {
+        printk("Registering of device to kernel failed!\n");
+        goto AddError;
+    }
 
-	pwm0 = pwm_request(0, "my-pwm");
-	if(pwm0 == NULL) {
-		printk("Could not get PWM0!\n");
-		goto AddError;
-	}
+    pwm0 = pwm_request(0, "my-pwm");
+    if(pwm0 == NULL) {
+        printk("Could not get PWM0!\n");
+        goto AddError;
+    }
 
-	pwm_config(pwm0, pwm_on_time, 1000000000);
-	pwm_enable(pwm0);
+    pwm_config(pwm0, pwm_on_time, 1000000000);
+    pwm_enable(pwm0);
 
-	return 0;
+    return 0;
 AddError:
-	device_destroy(my_class, my_device_nr);
+    device_destroy(my_class, my_device_nr);
 FileError:
-	class_destroy(my_class);
+    class_destroy(my_class);
 ClassError:
-	unregister_chrdev_region(my_device_nr, 1);
-	return -1;
+    unregister_chrdev_region(my_device_nr, 1);
+    return -1;
 }
 
 /**
  * @brief This function is called, when the module is removed from the kernel
  */
 static void __exit ModuleExit(void) {
-	pwm_disable(pwm0);
-	pwm_free(pwm0);
-	cdev_del(&my_device);
-	device_destroy(my_class, my_device_nr);
-	class_destroy(my_class);
-	unregister_chrdev_region(my_device_nr, 1);
-	printk("Goodbye, Kernel\n");
+    pwm_disable(pwm0);
+    pwm_free(pwm0);
+    cdev_del(&my_device);
+    device_destroy(my_class, my_device_nr);
+    class_destroy(my_class);
+    unregister_chrdev_region(my_device_nr, 1);
+    printk("Goodbye, Kernel\n");
 }
 
 module_init(ModuleInit);
@@ -2198,10 +2198,10 @@ Makefile如下
 obj-m += pwm_driver.o
 
 all:
-	make -C /lib/modules/$(shell uname -r)/build M=$(PWD) modules
+    make -C /lib/modules/$(shell uname -r)/build M=$(PWD) modules
 
 clean:
-	make -C /lib/modules/$(shell uname -r)/build M=$(PWD) clean
+    make -C /lib/modules/$(shell uname -r)/build M=$(PWD) clean
 \end{mycode}
 
 
