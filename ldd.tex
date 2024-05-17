@@ -198,7 +198,16 @@ Linux内核是一个基于makefile的工程，有1000多个选项和驱动程序
 $ ls arch/<you_arch>/configs/
 \end{mycode}
 
-对于基于ARM的CPU，这些配置文件位于\Colorbox{lightgrey}{\lstinline{arch/arm/configs/}}；对于基于V3S处理器的Atguigu派，默认的配置文件位于\Colorbox{lightgrey}{\lstinline{arch/arm/configs/atguigupi_defconfig}}；类似地，对于x86处理器，可以在\Colorbox{lightgrey}{\lstinline{arch/x86/configs/}}找到配置文件，仅有两个默认配置文件：\Colorbox{lightgrey}{\lstinline{i386_defconfig}}和\Colorbox{lightgrey}{\lstinline{x86_64_defconfig}}，它们分别对应于32位和64位版本。
+对于基于ARM的CPU，这些配置文件位于\Colorbox{lightgrey}{\lstinline{arch/arm/configs/}}；
+
+对于基于V3S处理器的Atguigu派，默认的配置文件位于\Colorbox{lightgrey}{\lstinline{arch/arm/configs/atguigupi_defconfig}}；
+
+类似地，对于x86处理器，可以在\Colorbox{lightgrey}{\lstinline{arch/x86/configs/}}找到配置文件，仅有两个默认配置文件：
+
+\begin{itemize}
+\item \Colorbox{lightgrey}{\lstinline{i386_defconfig}}: 32位版本
+\item \Colorbox{lightgrey}{\lstinline{x86_64_defconfig}}: 64位版本
+\end{itemize}
 
 对x86系统，内核配置非常简单：
 
@@ -251,7 +260,7 @@ $ ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- make atguigupi.dtb
 
 \section{内核代码编写风格}
 
-深入学习本节之前应该先参考一下内核编码风格手册，它位于内核源代码树的\Colorbox{lightgrey}{\lstinline{Documentation/CodingStyle}}目录下。编码风格是应该遵循的一套规则，如果想要内核开发人员接受其补丁就应该遵守这一规则。其中一些规则涉及缩进、程序流程、命名约定等。
+深入学习本节之前应该先参考一下内核编码风格手册，它位于内核源代码树的Documentation/CodingStyle目录下。编码风格是应该遵循的一套规则，如果想要内核开发人员接受其补丁就应该遵守这一规则。其中一些规则涉及缩进、程序流程、命名约定等。
 
 常见的规则如下。
 
