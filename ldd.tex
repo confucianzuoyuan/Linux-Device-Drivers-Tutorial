@@ -2,6 +2,7 @@
 \usepackage{realboxes}
 \usepackage{forest}
 \usepackage{import}
+\usepackage{adjustbox}
 
 \title{Linux设备驱动开发教程}
 \author{左元}
@@ -1207,12 +1208,15 @@ $ cd
 $ make menuconfig
 \end{mycode}
 
-\begin{table}[]
-\begin{tabular}{lll}
-配置位置                                                       & 操作                                                 & 用途                        \\
-Target options                                             & Target Arch设置为ARM (little endian)                  & 设置大小端                     \\
-Target options                                             & Target Arch Variant设置为Cortex-A7                    & 设置CPU架构                   \\
-Toolchain                                                  & Kernel Headers设置为你下载的LTS版本内核对应的版本号                 & 匹配内核版本                    \\
+\begin{table}[ht]
+\begin{adjustbox}{width=1\textwidth}
+\begin{tabular}{|l|l|l|}
+\hline
+配置位置                                                    & 操作                                                & 用途                        \\
+\hline
+Target options                                             & Target Arch设置为ARM (little endian)                & 设置大小端                     \\
+Target options                                             & Target Arch Variant设置为Cortex-A7                  & 设置CPU架构                   \\
+Toolchain                                                  & Kernel Headers设置为你下载的LTS版本内核对应的版本号      & 匹配内核版本                    \\
 Target packages \textgreater Networking applications       & hostapd                                            & 开启                        \\
 Target packages \textgreater Networking applications       & hostapd \textgreater Enable hostap driver          & 开启                        \\
 Target packages \textgreater Networking applications       & hostapd \textgreater Enable nl80211 driver         & 开启                        \\
@@ -1227,8 +1231,10 @@ Target packages \textgreater Networking applications       & openssh \textgreate
 Target packages \textgreater Networking applications       & wireless tools                                     & 开启                        \\
 Target packages \textgreater Networking applications       & wireless tools \textgreater Install shared library & 开启                        \\
 Target packages \textgreater Networking applications       & wpa\_supplicant                                    & 开启                        \\
-Target packages \textgreater Libraries \textgreater Crypto & openssl support                                    & openssl support的子菜单部件全部选中
+Target packages \textgreater Libraries \textgreater Crypto & openssl support                                    & openssl support的子菜单部件全部选中 \\
+\hline
 \end{tabular}
+\end{adjustbox}
 \end{table}
 
 同时修改partitions/root/etc/fstab文件中的ext2为ext4。
