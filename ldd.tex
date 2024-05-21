@@ -1842,6 +1842,160 @@ static const struct of_device_id imx_uart_dt_ids[] = {
 
 \chapter{字符设备驱动程序}
 
+本章的目的是编写一个完整的字符设备驱动。我们开发一个字符驱动是因为这一类适合大部分简单硬件设备。字符驱动也比块驱动易于理解（我们在后续章节接触）。我们的最终目的是编写一个模块化的字符驱动，但是我们不会在本章讨论模块化的事情。
+
+贯串本章，我们展示从一个真实设备驱动提取的代码片段：scull（Simple Character Utility for Loading Localities）。scull是一个字符驱动，操作一块内存区域好像它是一个设备。在本章，因为 scull 的这个怪特性, 我们可互换地使用设备这个词和``scull使用的内存区''。
+
+scull的优势在于它不依赖硬件。scull只是操作一些从内核分配的内存。任何人都可以编译和运行scull，并且scull在Linux运行的体系结构中可移植。另一方面，这个设备除了演示内核和字符驱动的接口和允许用户运行一些测试之外，不做任何有用的事情。
+
+\section{scull的设计}
+
+编写驱动的第一步是定义驱动将要提供给用户程序的能力（机制）。因为我们的``设备''是计算机内存的一部分，我们可自由做我们想做的事情。它可以是一个顺序的或者随机存取的设备，一个或多个设备，等等。
+
+为使 scull 作为一个模板来编写真实设备的真实驱动，我们将展示给你如何在计算机内存上实现几个设备抽象，每个有不同的特点。
+
+scull 源码实现下面的设备。模块实现的每种设备都被引用做一种类型。
+
+\begin{itemize}
+    \item $scull0 \sim scull3$：4 个设备，每个由一个全局永久的内存区组成。全局意味着如果设备被多次打开，设备中含有的数据由所有打开它的文件描述符共享。永久意味着如果设备关闭又重新打开，数据不会丢失。这个设备用起来有意思，因为它可以用惯常的命令来存取和测试，例如 cp，cat，以及 I/O 重定向。
+    \item $scullpipe0 \sim scullpipe3$：4个FIFO（先入先出）设备，行为类似管道。一个进程读的内容来自另一个进程所写的。如果多个进程读同一个设备，它们竞争数据。scullpipe的内部将展示阻塞读写和非阻塞读写如何实现，而不必采取中断。尽管真实的驱动使用硬件中断来同步它们的设备，阻塞和非阻塞操作的主题是重要的并且与中断处理是分开的。
+    \item scullsingle
+    \item scullpriv
+    \item sculluid
+    \item scullwuid
+    
+这些设备与 scull0 相似，但是在什么时候允许打开上有一些限制。第一个（snullsingle）只允许一次一个进程使用驱动，而 scullpriv 对每个虚拟终端（或者 X 终端会话）是私有的，因为每个控制台/终端上的进程有不同的内存区。sculluid 和 scullwuid 可以多次打开，但是一次只能是一个用户；前者返回一个``设备忙''错误，如果另一个用户锁着设备，而后者实现阻塞打开。这些 scull 的变体可能看来混淆了策略和机制，但是它们值得看看，因为一些实际设备需要这类管理。
+\end{itemize}
+
+每个 scull 设备演示了驱动的不同特色，并且呈现了不同的难度。本章涉及 scull0 到 scull3 的内部结构。
+
+\section{主设备号和次设备号}
+
+字符设备通过文件系统中的名字来读写。那些名字称为文件系统的特殊文件，或者设备文件，或者文件系统的简单节点；惯例上它们位于 \Colorbox{lightgrey}{\lstinline{/dev}} 目录。字符驱动的特殊文件由使用 \Colorbox{lightgrey}{\lstinline{ls -l}} 的输出的第一列的``c''标识。块设备也出现在 \Colorbox{lightgrey}{\lstinline{/dev}} 中，但是它们由``b''标识。本章集中在字符设备，但是下面的很多信息也适用于块设备。
+
+如果执行 \Colorbox{lightgrey}{\lstinline{ls -l}} 命令，你会看到在设备文件项中有 2 个数（由一个逗号分隔）在最后修改日期前面，这里通常是文件长度出现的地方。这些数字是给特殊设备的主次设备编号。下面的列表显示了一个典型系统上出现的几个设备。它们的主编号是 1, 4, 7, 和 10, 而次编号是 1, 3, 5, 64, 65, 和 129。
+
+\begin{mycode}{列表}
+crw-rw-rw- 1 root root 1,3   Apr 11 2002  null
+crw------- 1 root root 10,1  Apr 11 2002  psaux
+crw------- 1 root root 4,1   Oct 28 03:04 tty1
+crw-rw-rw- 1 root tty  4,64  Apr 11 2002  ttys0
+crw-rw---- 1 root uucp 4,65  Apr 11 2002  ttyS1
+crw--w---- 1 vcsa tty  7,1   Apr 11 2002  vcs1
+crw--w---- 1 vcsa tty  7,129 Apr 11 2002  vcsa1
+crw-rw-rw- 1 root root 1,5   Apr 11 2002  zero
+\end{mycode}
+
+传统上, 主编号标识设备相连的驱动. 例如, /dev/null 和 /dev/zero 都由驱动 1 来管理，而虚拟控制台和串口终端都由驱动 4 管理；同样，vcs1 和 vcsa1 设备都由驱动 7 管理。现代 Linux 内核允许多个驱动共享主编号，但是你看到的大部分设备仍然按照一个主编号一个驱动的原则来组织。
+
+次编号被内核用来决定引用哪个设备。依据你的驱动是如何编写的（如同我们下面见到的），你可以从内核得到一个你的设备的直接指针，或者可以自己使用次编号作为本地设备数组的索引。不论哪个方法，内核自己几乎不知道次编号的任何事情，除了它们指向你的驱动实现的设备。
+
+\subsection{设备编号的内部表示}
+
+在内核中，dev\_t 类型（在 <linux/types.h> 中定义）用来保存设备编号 —— 包括主设备号和次设备号。对于 2.6.0 内核，dev\_t 是 32 位的数值，其中 12 位用作主编号，其余的 20 位用作次编号。你的代码应当对于设备编号的组织从不做任何假设；相反，应当利用在 <linux/kdev\_t.h> 中的一套宏定义。为获得一个 dev\_t 的主或者次编号，使用：
+
+\begin{mycode}{设备编号}
+MAJOR(dev_t dev);
+MINOR(dev_t dev);
+\end{mycode}
+
+相反，如果你有主次编号，需要将其转换为一个 dev\_t ，使用：
+
+\begin{mycode}{转换成dev\_t}
+MKDEV(int major, int minor);
+\end{mycode}
+
+\subsection{分配和释放设备编号}
+
+在建立一个字符驱动时你的驱动需要做的第一件事是获取一个或多个设备编号来使用。为此目的的必要的函数是 \Colorbox{lightgrey}{\lstinline{register_chrdev_region}}，在 <linux/fs.h>中声明：
+
+\begin{mycode}{获取设备号}
+int register_chrdev_region(dev_t first, unsigned int count, char *name);
+\end{mycode}
+
+这里，first 是你要分配的起始设备编号。first 的次编号部分常常是 0，但是没有要求必须这样。count 是你请求的连续设备编号的总数。注意，如果 count 太大，你要求的范围可能溢出到下一个次编号；但是只要你要求的编号范围可用，一切都仍然会正确工作。最后，name 是应当连接到这个编号范围的设备的名字；它会出现在 /proc/devices 和 sysfs 中。
+
+如同大部分内核函数，如果分配成功进行，\Colorbox{lightgrey}{\lstinline{register_chrdev_region}} 的返回值是 0 。出错的情况下，返回一个负的错误码，你不能读写请求的编号区域。
+
+如果你确实事先知道你需要哪个设备编号，\Colorbox{lightgrey}{\lstinline{register_chrdev_region}} 工作会工作的很好。然而，你常常不会知道你的设备使用哪个主编号；在 Linux 内核开发社团中一直努力使用动态分配设备编号。 内核会乐于动态为你分配一个主编号，但是你必须使用一个不同的函数来请求这个分配。
+
+\begin{mycode}{动态分配设备号}
+int alloc_chrdev_region(dev_t *dev, unsigned int firstminor, unsigned int count, char *name);
+\end{mycode}
+
+使用这个函数，dev 是一个只输出的参数，它在函数成功完成时持有你的分配范围的第一个数。firstminor 应当是请求的第一个要用的次编号；它常常是 0 。count 和 name 参数如同给 \Colorbox{lightgrey}{\lstinline{request_chrdev_region}} 的一样。
+
+不管你任何分配你的设备编号，你应当在不再使用它们时释放它。设备编号的释放使用：
+
+\begin{mycode}{释放编号}
+void unregister_chrdev_region(dev_t first, unsigned int count);
+\end{mycode}
+
+调用 \Colorbox{lightgrey}{\lstinline{unregister_chrdev_region}} 的地方常常是你的模块的 cleanup 函数。上面的函数分配设备编号给你的驱动使用，但是它们不告诉内核你实际上会对这些编号做什么。在用户空间程序能够存取这些设备号中一个之前，你的驱动需要连接它们到它的实现设备操作的内部函数上。我们将描述如何简短完成这个连接，但首先顾及一些必要的枝节问题。
+
+\subsection{主编号的动态分配}
+
+一些主设备编号是静态分派给最普通的设备的。一个这些设备的列表在内核源码树的 Documentation/devices.txt 中。分配给你的新驱动使用一个已经分配的静态编号的机会很小，但是，并且新编号没在分配。因此，作为一个驱动编写者，你有一个选择：你可以简单地捡一个看来没有用的编号，或者你以动态方式分配主编号。只要你是你的驱动的唯一用户就可以捡一个编号用；一旦你的驱动更广泛的被使用了，一个随机捡来的主编号将导致冲突和麻烦。
+
+因此，对于新驱动，我们强烈建议你使用动态分配来获取你的主设备编号，而不是随机选取一个当前空闲的编号。换句话说，你的驱动应当几乎肯定地使用 \Colorbox{lightgrey}{\lstinline{alloc_chrdev_region}}，不是 \Colorbox{lightgrey}{\lstinline{register_chrdev_region}} 。
+
+动态分配的缺点是你无法提前创建设备节点，因为分配给你的模块的主编号会变化。对于驱动的正常使用，这不是问题，因为一旦编号分配了，你可从 /proc/devices 中读取它。
+
+为使用动态主编号来加载一个驱动，因此，可使用一个简单的脚本来代替调用 insmod ，在调用 insmod 后，读取 /proc/devices 来创建特殊文件。
+
+一个典型的 /proc/devices 文件看来如下：
+
+\begin{mycode}{/proc/devices}
+Character devices:
+1  mem
+2  pty
+3  ttyp
+4  ttyS
+6  lp
+7  vcs
+10 misc
+13 input
+14 sound
+
+Block devices:
+2  fd
+8  sd
+11 sr
+65 sd
+66 sd
+\end{mycode}
+
+因此加载一个已经安排了一个动态编号的模块的脚本，可以使用一个工具来编写，如 awk ，来从 /proc/devices 获取信息以创建 /dev 中的文件。
+
+下面的脚本，snull\_load，是 scull 发布的一部分。以模块发布的驱动的用户可以从系统的 rc.local 文件中调用这样一个脚本，或者在需要模块时手工调用它。
+
+\begin{mycode}{加载脚本}
+#!/bin/sh
+module="scull"
+device="scull"
+mode="664"
+
+# 使用传入到该脚本的所有参数调用 insmod，同时使用路径名来指定模块位置，
+# 这是因为新的modutils默认不会在当前目录中查找模块。
+/sbin/insmod ./$module.ko $* || exit 1
+
+# 删除原有节点
+rm -f /dev/${device}[0-3]
+
+major=$(awk "\\$2==\"$module\" {print \\$1}" /proc/devices)
+mknod /dev/${device}0 c $major 0
+mknod /dev/${device}1 c $major 1
+mknod /dev/${device}2 c $major 2
+mknod /dev/${device}3 c $major 3
+
+# 给定适当的组属性以及许可，并修改属组。
+# 并非所有的发行版都具有staff组，有些有wheel组。
+group="staff"
+grep -q '^staff:' /etc/group || group="wheel"
+chgrp $group /dev/${device}[0-3]
+chmod $mode /dev/${device}[0-3]
+\end{mycode}
+
 \chapter{块设备驱动程序}
 
 \chapter{\texorpdfstring{$I^2C$客户端驱动程序}{I2C客户端驱动程序}}
@@ -1906,6 +2060,16 @@ static const struct of_device_id imx_uart_dt_ids[] = {
 \label{fig:I2C总线示意图}
 \end{figure}
 
+时钟频率为10 kHz~100 kHz,400 kHz~2 MHz不等。本教程不涉及总线规范或总线驱动程序。然而，总线驱动程序应该管理总线并符合总线规范。i.MX6芯片的总线驱动程序示例可在内核源代码drivers/i2c/busses/i2c-imx.c中找到。
+
+本章集中介绍客户端驱动程序，以便处理该总线上的从设备。本章涉及以下主题。
+
+\begin{itemize}
+\item $I^2C$客户驱动程序架构。
+\item 设备访问，从设备中读/写设备数据。
+\item 在DT中声明客户端设备。
+\end{itemize}
+
 \section{驱动程序架构}
 
 当为其编写驱动程序的设备位于物理总线（被称作总线控制器）上时，它一定依赖总线的驱动程序，也就是控制器驱动程序，它负责在设备之间共享总线访问。控制器驱动程序在设备和总线之间提供抽象层。例如，当在$I^2C$或USB总线上执行事务（读取或写入）时，$I^2C$/USB总线控制器将在后台透明地处理该事务。每个总线控制器驱动程序都提供一组函数，以简化位于该总线上设备驱动程序的开发。这适用于每个物理总线（$I^2C$、SPI、USB、PCI、SDIO等）。$I^2C$驱动程序在内核中表示为\Colorbox{lightgrey}{\lstinline{struct i2c_driver}}的实例。$I^2C$客户端（代表设备本身）由\Colorbox{lightgrey}{\lstinline{struct i2c_client}}结构表示。
@@ -1926,9 +2090,63 @@ struct i2c_driver {
 };
 \end{mycode}
 
-struct i2c\_driver结构包含并描述通用访问例程,这些例程是处理声明驱动程序的设备所必需的,而struct i2c\_client则包含设备特有的信息,如其地址。struct i2c\_client结构表示和描述I2C设备。本章后面的部分将介绍如何填充这些结构。
+\Colorbox{lightgrey}{\lstinline{struct i2c_driver}}结构包含并描述通用访问例程，这些例程是处理声明驱动程序的设备所必需的，而\Colorbox{lightgrey}{\lstinline{struct i2c_client}}则包含设备特有的信息，如其地址。\Colorbox{lightgrey}{\lstinline{struct i2c_client}}结构表示和描述$I^2C$设备。本章后面的部分将介绍如何填充这些结构。
 
+1. probe函数
 
+probe函数是\Colorbox{lightgrey}{\lstinline{struct i2c_driver}}结构的一部分，在$I^2C$器件实例化后随时执行。它负责以下任务。
+
+\begin{itemize}
+    \item 检查设备是否是所期望的。
+    \item 使用\Colorbox{lightgrey}{\lstinline{i2c_check_functionality}}函数检查SoC的$I^2C$总线控制器是否支持设备所需的功能。
+    \item 初始化设备。
+    \item 设置设备特定的数据。
+    \item 注册合适的内核框架。
+\end{itemize}
+
+probe函数的原型如下：
+
+\begin{mycode}{probe函数的原型}
+static int foo_probe(struct i2c_client *client, const struct i2c_device_id *id)
+\end{mycode}
+
+各参数说明如下。
+
+\begin{itemize}
+    \item \Colorbox{lightgrey}{\lstinline{struct i2c_client}}指针：代表$I^2C$设备本身。该结构继承自device结构，由内核提供给probe函数。客户端结构在\Colorbox{lightgrey}{\lstinline{include/linux/i2c.h}}中定义。其定义如下：
+\begin{mycode}{i2c\_client}
+struct i2c_client {
+    unsigned short flags;
+    /// 芯片地址：7位。地址被存储在addr的低7位。
+    unsigned short addr;
+    char name[I2C_NAME_SIZE];
+    /// 适配器
+    struct i2c_adapter *adapter;
+    /// 设备结构
+    struct device dev;
+    /// 设备发出的中断请求
+    intirq;
+    struct list_head detected;
+#if IS_ENABLED(CONFIG_I2C_SLAVE)
+    /// 从设备的回调函数
+    i2c_slave_cb_t slave_cb;
+#endif
+};
+\end{mycode}
+    \item 所有字段由内核基于注册客户端时所提供的参数进行填充。稍后会看到如何将设备注册到内核。
+    \item \Colorbox{lightgrey}{\lstinline{struct i2c_device_id}}指针：指向与正在探测的设备相匹配的$I^2C$设备ID项。
+\end{itemize}
+
+$I^2C$内核使用户能够存储指向其所选任何数据结构的指针，把它作为设备特定数据。要存储或检索数据，请使用$I^2C$内核提供的以下函数：
+
+\begin{mycode}{$I^2C$内核提供的函数}
+/// 设置数据
+void i2c_set_clientdata(struct i2c_client *client, void *data);
+/// 获取数据
+void *i2c_get_clientdata(const struct i2c_client *client);
+\end{mycode}
+
+这些函数在内部调用\Colorbox{lightgrey}{\lstinline{dev_set_drvdata}}和\Colorbox{lightgrey}{\lstinline{dev_get_drvdata}}来更新或获取\Colorbox{lightgrey}{\lstinline{struct i2c_client}}结构中\Colorbox{lightgrey}{\lstinline{struct device}}子结构的\Colorbox{lightgrey}{\lstinline{void * driver_data}}字段的值。
 
 \section{总结}
 
