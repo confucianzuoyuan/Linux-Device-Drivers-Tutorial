@@ -1846,7 +1846,65 @@ static const struct of_device_id imx_uart_dt_ids[] = {
 
 \chapter{\texorpdfstring{$I^2C$客户端驱动程序}{I2C客户端驱动程序}}
 
-由飞利浦（现为恩智浦）发明的$I^2C$总线是双线制：由串行数据（SDA）、串行时钟（SCL）构成的异步串行总线。它是多主总线，但多主模式未广泛使用。SDA和SCL都是漏极开路/集电极开路，这意味着它们都可以使输出驱动为低电平，但是如果没有上拉电阻，则都不能使输出驱动为高电平。SCL由主设备生成，以便在总线上同步数据（由SDA传送）传送。从机和主机都可以发送数据（当然不是同时），因此SDA是双向线路。这就是说SCL信号也是双向的，因为从机可以通过保持SCL线低电平来延长时钟。总线由主机控制，在这里的例子中它是SoC的一部分。该总线经常在嵌入式系统中，用于连接串行EEPROM、RTC芯片、GPIO扩展器、温度传感器等，如图7-1所示。
+由飞利浦（现为恩智浦）发明的$I^2C$总线是双线制：由串行数据（SDA）、串行时钟（SCL）构成的异步串行总线。它是多主总线，但多主模式未广泛使用。SDA和SCL都是漏极开路/集电极开路，这意味着它们都可以使输出驱动为低电平，但是如果没有上拉电阻，则都不能使输出驱动为高电平。SCL由主设备生成，以便在总线上同步数据（由SDA传送）传送。从机和主机都可以发送数据（当然不是同时），因此SDA是双向线路。这就是说SCL信号也是双向的，因为从机可以通过保持SCL线低电平来延长时钟。总线由主机控制，在这里的例子中它是SoC的一部分。该总线经常在嵌入式系统中，用于连接串行EEPROM、RTC芯片、GPIO扩展器、温度传感器等，如图\ref{fig:I2C总线示意图}所示。
+
+\begin{figure}[htbp]
+\centering
+\tikzset{every picture/.style={line width=0.75pt}} %set default line width to 0.75pt        
+
+\scalebox{0.5}{
+\begin{tikzpicture}[x=0.75pt,y=0.75pt,yscale=-1,xscale=1]
+%uncomment if require: \path (0,300); %set diagram left start at 0, and has height of 300
+
+%Shape: Rectangle [id:dp5196207434278797] 
+\draw   (37,83) -- (187,83) -- (187,185) -- (37,185) -- cycle ;
+%Straight Lines [id:da5627473668996359] 
+\draw    (188,119) -- (580,119) ;
+%Straight Lines [id:da010662346115412724] 
+\draw    (188,153) -- (580,153) ;
+%Shape: Rectangle [id:dp010480578739430646] 
+\draw  [fill={rgb, 255:red, 184; green, 233; blue, 134 }  ,fill opacity=1 ] (364,19) -- (472,19) -- (472,73) -- (364,73) -- cycle ;
+%Shape: Rectangle [id:dp04190589424982427] 
+\draw  [fill={rgb, 255:red, 184; green, 233; blue, 134 }  ,fill opacity=1 ] (207,221) -- (315,221) -- (315,275) -- (207,275) -- cycle ;
+%Shape: Rectangle [id:dp4860326733837781] 
+\draw  [fill={rgb, 255:red, 184; green, 233; blue, 134 }  ,fill opacity=1 ] (328,221) -- (436,221) -- (436,275) -- (328,275) -- cycle ;
+%Shape: Rectangle [id:dp9524937334147969] 
+\draw  [fill={rgb, 255:red, 184; green, 233; blue, 134 }  ,fill opacity=1 ] (454,221) -- (562,221) -- (562,275) -- (454,275) -- cycle ;
+%Straight Lines [id:da8157092792166125] 
+\draw    (228,121) -- (228,222) ;
+%Straight Lines [id:da13363186575652009] 
+\draw    (353,119) -- (353,220) ;
+%Straight Lines [id:da1628282680825035] 
+\draw    (480,119) -- (480,220) ;
+%Straight Lines [id:da49332198915757886] 
+\draw    (258,154) -- (260,221) ;
+%Straight Lines [id:da9353008510448693] 
+\draw    (384,153) -- (385,221) ;
+%Straight Lines [id:da5599000501484221] 
+\draw    (508,154) -- (510,221) ;
+%Straight Lines [id:da7013725499426995] 
+\draw    (393,74) -- (394,119) ;
+%Straight Lines [id:da461479125348883] 
+\draw    (426,73) -- (428,152) ;
+
+% Text Node
+\draw (67,125) node [anchor=north west][inner sep=0.75pt]   [align=left] {CPU（主机）};
+% Text Node
+\draw (591,111) node [anchor=north west][inner sep=0.75pt]   [align=left] {SCL};
+% Text Node
+\draw (590,142) node [anchor=north west][inner sep=0.75pt]   [align=left] {SDA};
+% Text Node
+\draw (372,38) node [anchor=north west][inner sep=0.75pt]   [align=left] {从机3（0x63）};
+% Text Node
+\draw (215,241) node [anchor=north west][inner sep=0.75pt]   [align=left] {从机1（0x55）};
+% Text Node
+\draw (337,241) node [anchor=north west][inner sep=0.75pt]   [align=left] {从机2（0x22）};
+% Text Node
+\draw (462,240) node [anchor=north west][inner sep=0.75pt]   [align=left] {从机4（0x51）};
+\end{tikzpicture}}
+\caption{$I^2C$总线和设备}
+\label{fig:I2C总线示意图}
+\end{figure}
 
 \section{驱动程序架构}
 
@@ -1854,7 +1912,7 @@ static const struct of_device_id imx_uart_dt_ids[] = {
 
 \subsection{i2c\_driver结构}
 
-I2C驱动程序在内核中声明为struct i2c\_driver实例,它看起来像下面这样:
+$I^2C$驱动程序在内核中声明为\Colorbox{lightgrey}{\lstinline{struct i2c_driver}}实例，它看起来像下面这样:
 
 \begin{mycode}{i2c\_driver}
 struct i2c_driver {
