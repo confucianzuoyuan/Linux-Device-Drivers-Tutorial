@@ -670,7 +670,11 @@ MODULE_DESCRIPTION("Hello, world! Module");
 
 \subsection{错误处理}
 
-为给定的错误返回错误代码会导致内核或用户空间应用产生不必要的行为,从而做出错误的决定。为了保持清楚,内核树中预定义的错误几乎涵盖了我们可能遇到的所有情况。一些错误(及其含义)在include/uapi/asm-generic/errno-base.h中定义,列表的其余错误可以在include/uapi/asm-generic/errno.h中找到。以下是从include/uapi/asm-generic/errno-base.h中摘录的错误列表:
+为给定的错误返回错误代码会导致内核或用户空间应用产生不必要的行为,从而做出错误的决定。为了保持清楚,内核树中预定义的错误几乎涵盖了我们可能遇到的所有情况。
+
+一些错误(及其含义)在include/uapi/asm-generic/errno-base.h中定义,列表的其余错误可以在include/uapi/asm-generic/errno.h中找到。
+
+以下是从include/uapi/asm-generic/errno-base.h中摘录的错误列表:
 
 \begin{mycode}{错误编码}
 #define  EPERM       1    /* 操作不允许 */
@@ -797,7 +801,9 @@ long IS_ERR(const void *ptr);
 long PTR_ERR(const void *ptr);
 \end{mycode}
 
-第一个函数实际上把错误值作为指针返回。假若函数在内存申请失败后要执行语句return -ENOMEM,则必须改为这样的语句:return ERR\_PTR (-ENOMEM);。第二个函数用于检查返回值是否是指针错误:if(IS\_ERR(foo))。最后一个函数返回实际错误代码:return PTR\_ERR(foo);。以下是一个例子,说明如何使用ERR\_PTR、IS\_ERR和PTR\_ERR:
+第一个函数实际上把错误值作为指针返回。假若函数在内存申请失败后要执行语句return -ENOMEM,则必须改为这样的语句:return ERR\_PTR (-ENOMEM);。
+
+第二个函数用于检查返回值是否是指针错误:if(IS\_ERR(foo))。最后一个函数返回实际错误代码:return PTR\_ERR(foo);。以下是一个例子,说明如何使用ERR\_PTR、IS\_ERR和PTR\_ERR:
 
 \begin{mycode}{example}
 static struct iio_dev *indiodev_setup(){
@@ -849,7 +855,7 @@ printk()是在内核空间使用的,其作用和在用户空间使用printf()一
     printk(KERN_ERR "This is an error\n");
 \end{mycode}
 
-如果省略调试级别(printk("This is an error\n")),则内核将根据CONFIG\_DEFAULT\_MESSAGE\_LOGLEVEL配置选项(这是默认的内核日志级别)向该函数提供一个调试级别。实际上可以使用以下宏,其名称更有意义,它们是对前面所定义内容的包装——pr\_emerg、pr\_alert、pr\_crit、pr\_err、pr\_warning、pr\_notice、pr\_info和pr\_debug:
+如果省略调试级别(\Colorbox{lightgrey}{\lstinline{printk("This is an error\n")}}),则内核将根据CONFIG\_DEFAULT\_MESSAGE\_LOGLEVEL配置选项(这是默认的内核日志级别)向该函数提供一个调试级别。实际上可以使用以下宏,其名称更有意义,它们是对前面所定义内容的包装——pr\_emerg、pr\_alert、pr\_crit、pr\_err、pr\_warning、pr\_notice、pr\_info和pr\_debug:
 
 \begin{mycode}{example}
     pr_err("This is the same error\n");
@@ -866,13 +872,550 @@ printk()是在内核空间使用的,其作用和在用户空间使用printf()一
 
 内核日志级别列表如下:
 
+\chapter{一个完整的最简单的驱动Demo}
+
+本章描述了基于全志V3S开发板的简单驱动程序和测试应用程序的设计流程。我们设计的驱动程序和测试程序极其简单，适合初学者上手学习。
+
+软件运行的硬件环境是基于V3S开发板中的全志V3S处理器，该处理器集成了一个1.2GHz工作主频的单ARM CortexTM-A7 核，芯片内部集成了64MB DRAM 存储器。
+
+设计流程概述
+
+\begin{enumerate}
+    \item 步骤一：编写一个\Colorbox{lightgrey}{\lstinline{demo_driver.c}}的驱动程序。
+    \item 步骤二：编写makefile文件。
+    \item 步骤三：编写一个\Colorbox{lightgrey}{\lstinline{demo_app.c}}的应用程序。
+    \item 步骤四：在V3S开发板中安装\Colorbox{lightgrey}{\lstinline{demo_driver}}驱动程序，并测试\Colorbox{lightgrey}{\lstinline{demo_app}}应用程序。
+\end{enumerate}
+
+linux系统是一个分层结构，我们设计的\Colorbox{lightgrey}{\lstinline{demo_driver}}位于内核中的驱动部分，\Colorbox{lightgrey}{\lstinline{demo_app}}位于用户级。
+
+\section{编写驱动程序}
+
+编写一个\Colorbox{lightgrey}{\lstinline{demo_driver.c}}的驱动程序，驱动程序源码如下：
+
+\begin{mycode}{demo\_driver.c}
+#include <linux/module.h>
+#include <linux/kernel.h>
+#include <linux/fs.h>
+#include <linux/init.h>
+
+#define    DRIVER_MAJOR     188
+#define    DEVICE_NAME     "demo_driver"
+
+static int demo_open(struct inode *inode, struct file *file)
+{    
+    printk(KERN_EMERG "open\n");
+    return 0;
+}
+
+static ssize_t demo_write(struct file *file, const char __user * buf, size_t count, loff_t *ppos)
+{
+    printk(KERN_EMERG "write\n");
+    return 0;
+}
+static ssize_t demo_read(struct file *file,  char __user * buf, size_t count, loff_t *ppos)
+{
+    printk(KERN_EMERG "read\n");  
+    return 0;
+}
+
+static int demo_close(struct inode *inode, struct file *file)
+{
+    printk(KERN_EMERG "close\n");
+    return 0;
+}
+
+static struct file_operations demo_flops = 
+{
+    .owner  =   THIS_MODULE,
+    .open   =   demo_open,     
+    .write  =   demo_write,
+    .read     =      demo_read,
+    .release =  demo_close,
+};
+
+static int __init demo_init(void)
+{
+    int ret;
+         
+    //注册设备
+    ret = register_chrdev(DRIVER_MAJOR,DEVICE_NAME, &demo_flops);
+
+    if (ret < 0) 
+    {
+      printk(KERN_EMERG DEVICE_NAME " can't register major number.\n");
+      return ret;
+    }
+    else
+    {
+        printk(KERN_EMERG DEVICE_NAME "demo init\n");
+    }
+
+    return 0;
+}
+
+static void __exit demo_exit(void)
+{
+    unregister_chrdev(DRIVER_MAJOR, DEVICE_NAME);
+    printk(KERN_EMERG DEVICE_NAME "demo exit\n");
+}
+
+module_init(demo_init);
+module_exit(demo_exit);
+MODULE_LICENSE("GPL");
+\end{mycode}
+
+编译驱动程序依赖linux内核源码环境，需要把驱动C文件放在linux源码目录中，通过编译linux内核的方式得到驱动ko文件。
+
+为了得到驱动ko，我们在linux/drivers/char目录下面创建一个demo\_driver的文件夹。
+
+然后把demo\_driver.c程序拷贝到demo\_driver的文件夹中。
+
+\section{编写Makefile}
+
+我们通过编译linux内核的方式得到驱动ko文件，为了在编译内核时得到相应的驱动，我们需要在linux内核代码中增加和修改Makefile文件（Makefile的作用指定了工程编译的方法和步骤）。
+
+首先我们修改linux/drivers/char目录下Makefile文件，在Makefile文件内容最末行加入一行代码：
+
+\begin{mycode}{添加一行代码}
+obj += demo_driver/
+\end{mycode}
+
+这句代码的意思是：编译内核时，子目录demo\_driver/下的文件也将进行编译。
+
+我们在linux/drivers/char/demo\_driver中创建一个Makefile文件，同时在Makefile文件中加入一行代码：
+
+\begin{mycode}{Makefile}
+obj-m += demo_driver.o
+\end{mycode}
+
+这句代码的意思是：编译当前目录中的demo\_driver.c文件，输出一个demo\_driver.ko的驱动文件。
+
+准备好demo\_driver.c文件和Makefile文件后，我们执行编译内核指令。
+
+经过上述一波操作，我们得到了demo\_driver.ko的驱动文件。
+
+\section{编写应用程序}
+
+编写一个demo\_app.c的应用程序，程序源码如下：
+
+\begin{mycode}{demo\_app.c}
+#include <stdio.h> 
+#include <string.h> 
+#include <stdlib.h>
+#include <sys/types.h>
+#include <sys/stat.h> 
+#include <fcntl.h> 
+#include <unistd.h>
+
+int main(int arvc, char *argv[])
+{
+    int fd;
+    int value = 0;
+    printf("demo test\n");
+
+    /// 打开驱动
+    fd = open("/dev/demo_driver", O_RDWR);
+
+    while(1)
+    {
+        /// 执行驱动读操作
+        read(fd, &value, 4);
+        sleep(1);
+        /// 执行驱动写操作
+        write(fd, &value, 4);
+        sleep(1);    
+        
+        printf("demo run\n");
+    }
+    return 0;
+}
+\end{mycode}
+
+然后编译应用程序。
+
+\begin{mycode}{shell}
+arm-linux-gnueabihf-gcc -static -o demo_app demo_app.c
+\end{mycode}
+
+于是我们得到一个demo\_app可执行文件。
+
+然后将得到的两个二进制\Colorbox{lightgrey}{\lstinline{demo_driver.ko}}和\Colorbox{lightgrey}{\lstinline{demo_app}}拷贝到我们的嵌入式系统里面。
+
+安装驱动：
+
+\begin{mycode}{安装驱动}
+    $ insmod demo_driver.ko
+    # 执行创建文件节点指令
+    $ mknod /dev/demo_driver c 188 0
+    # 查看驱动设备
+    $ ls /dev
+\end{mycode}
+
+188的是设备号，我们在设计的驱动C文件中有如下定义：
+
+\begin{mycode}{设备号定义}
+#define    DRIVER_MAJOR     188
+#define    DEVICE_NAME      "demo_driver"
+\end{mycode}
+
+执行\Colorbox{lightgrey}{\lstinline{demo_app}}程序：
+
+\begin{mycode}{执行程序}
+$ chmod 777 demo_app
+$ ./demo_app
+\end{mycode}
+
+\begin{marker}
+    如果重启设备，则需要重新加载驱动。
+\end{marker}
+
 \chapter{内核工具和辅助函数}
 
+内核是独立的软件,正如将在本章中看到的那样,它没有使用任何C语言库。它实现了现代库中可能具有的所有机制(甚至更多),如压缩、字符串函数等。
 
+本章涉及以下主题。
 
-\chapter{字符设备驱动程序}
+\begin{itemize}
+    \item 介绍内核容器数据结构。
+    \item 探讨内核睡眠机制。
+    \item 使用定时器。
+    \item 深入研究内核锁定机制(互斥锁、自旋锁)。
+    \item 使用内核专用API实现延迟工作。
+    \item 使用IRQ。
+\end{itemize}
 
-\chapter{平台设备驱动程序}
+\section{理解宏container\_of}
+
+在代码中管理多个数据结构时,几乎总是需要将一个结构嵌入另一个结构中,并随时检索它们,而不关心有关内存偏移或边界的问题。假设有一个struct person,其定义如下:
+
+\begin{mycode}{struct person}
+struct person {
+    int age;
+    char *name;
+} p;
+\end{mycode}
+
+只用age或name上的指针就可以检索包装(包含)该指针的整个结构。顾名思义,container\_of宏用于查找指定结构字段的容器。该宏在include/linux/kernel.h中定义,如下所示:
+
+\begin{mycode}{container\_of}
+#define container_of(ptr, type, member) ({                  \
+    const typeof(((type *)0)->member) * __mptr = (ptr);     \
+    (type *)((char *)__mptr - offsetof(type, member)); })
+\end{mycode}
+
+不要害怕指针,就当它是:
+
+\begin{mycode}{函数表达}
+    container_of(pointer, container_type, container_field);
+\end{mycode}
+
+前面代码片段中包含的元素如下。
+
+\begin{itemize}
+    \item pointer:指向结构字段的指针。
+    \item container\_type:包装(包含)指针的结构类型。
+    \item container\_field:pointer指向的结构内字段的名称。
+\end{itemize}
+
+来看下面的容器:
+
+\begin{mycode}{容器}
+struct person {
+    int age;
+    char *name;
+};
+\end{mycode}
+
+现在考虑其一个实例,以及一个指向其name成员的指针:
+
+\begin{mycode}{example}
+struct person somebody;
+[...]
+char *the_name_ptr = somebody.name;
+\end{mycode}
+
+除指向name成员的指针(the\_name\_ptr)外,还可以使用container\_of宏来获取指向包装此成员的整个结构(容器)的指针,方法如下:
+
+\begin{mycode}{example}
+struct person *the_person;
+the_person = container_of(the_name_ptr, struct person, name);
+\end{mycode}
+
+container\_of考虑name从该结构开始处的偏移量,进而获得正确的指针位置。从指针the\_name\_ptr中减去字段name的偏移量,即可得到正确的位置。这就是该宏最后一行代码的功能:
+
+\begin{mycode}{example}
+(type *)( (char *)__mptr - offsetof(type,member) );
+\end{mycode}
+
+下面的例子实际应用该宏:
+
+\begin{mycode}{example}
+struct family {
+    struct person *father;
+    struct person *mother;
+    int number_of_suns;
+    int salary;
+} f;
+
+/*
+* 指向结构字段的指针
+* (可以是任何家庭的任何成员吗)
+*/
+struct *person = family.father;
+struct family *fam_ptr;
+
+/* 找回他的家族 */
+fam_ptr = container_of(person, struct family, father);
+\end{mycode}
+
+关于container\_of宏,只需了解这些就够了。本书将进一步开发的真正驱动程序像下面这样:
+
+\begin{mycode}{example}
+struct mcp23016 {
+    struct i2c_client *client;
+    struct gpio_chip chip;
+}
+
+/* 检索给定指针chip字段的mcp23016结构体 */
+static inline struct mcp23016 *to_mcp23016(struct gpio_chip *gc)
+{
+    return container_of(gc, struct mcp23016, chip);
+}
+
+static int mcp23016_probe(struct i2c_client *client, const struct i2c_device_id *id)
+{
+    struct mcp23016 *mcp;
+    [...]
+    mcp = devm_kzalloc(&client->dev, sizeof(*mcp), GFP_KERNEL);
+    if (!mcp)
+        return -ENOMEM;
+    [...]
+}
+\end{mycode}
+
+宏container\_of主要用在内核的通用容器中。在本书的一些例子(从第5章开始)中,会用到container\_of宏。
+
+\section{链表}
+
+想象一下,有一个驱动程序管理多个设备,假设有5个设备,可能需要在驱动程序中跟踪每个设备,这就需要链表。链表实际上有两种类型。
+
+\begin{itemize}
+    \item 单链表
+    \item 双链表
+\end{itemize}
+
+内核开发者只实现了循环双链表,因为这个结构能够实现FIFO和LIFO,并且内核开发者要保持最少代码。
+
+为了支持链表,代码中要添加的头文件是<linux/list.h>。内核中链表实现核心部分的数据结构是struct list\_head,其定义如下:
+
+\begin{mycode}{链表定义}
+struct list_head {
+    struct list_head *next, *prev;
+};
+\end{mycode}
+
+struct list\_head用在链表头和每个节点中。在内核中,将数据结构表示为链表之前,该结构必须嵌入struct list\_head字段。例如,我们来创建汽车链表:
+
+\begin{mycode}{汽车链表}
+struct car {
+    int door_number;
+    char *color;
+    char *model;
+};
+\end{mycode}
+
+在创建汽车链表之前,必须修改其结构,嵌入struct list\_head字段。结构变成如下形式:
+
+\begin{mycode}{example}
+struct car {
+    int door_number;
+    char *color;
+    char *model;
+    struct list_head list; /* 内核的链表结构 */
+};
+\end{mycode}
+
+创建struct list\_head变量,该变量总是指向链表的头部(第一个元素)。list\_head的这个实例与任何汽车都无关,而是一个特殊实例:
+
+\begin{mycode}{特殊实例}
+    static LIST_HEAD(carlist);
+\end{mycode}
+
+现在可以创建汽车并将其添加到链表carlist:
+
+\begin{mycode}{example}
+#include <linux/list.h>
+struct car *redcar = kmalloc(sizeof(*car), GFP_KERNEL);
+struct car *bluecar = kmalloc(sizeof(*car), GFP_KERNEL);
+
+/* 初始化每个节点的列表条目*/
+INIT_LIST_HEAD(&bluecar->list);
+INIT_LIST_HEAD(&redcar->list);
+
+/* 为颜色和模型字段分配内存,并填充每个字段 */
+[...]
+list_add(&redcar->list, &carlist) ;
+list_add(&bluecar->list, &carlist) ;
+\end{mycode}
+
+现在,carlist包含两个元素。接下来深入介绍链表API。
+
+\subsection{创建和初始化链表}
+
+有两种方法创建和初始化链表。
+
+1. 动态方法
+
+动态方法由struct list\_head组成,用INIT\_LIST\_HEAD宏初始化:
+
+\begin{mycode}{动态初始化链表}
+struct list_head mylist;
+INIT_LIST_HEAD(&mylist);
+\end{mycode}
+
+以下是INIT\_LIST\_HEAD的展开形式:
+
+\begin{mycode}{example}
+static inline void INIT_LIST_HEAD(struct list_head *list)
+{
+    list->next = list;
+    list->prev = list;
+}
+\end{mycode}
+
+2. 静态方法
+
+静态分配通过LIST\_HEAD宏完成:
+
+\begin{mycode}{example}
+LIST_HEAD(mylist)
+\end{mycode}
+
+LIST\_HEAD的定义如下:
+
+\begin{mycode}{example}
+#define LIST_HEAD(name) \
+    struct list_head name = LIST_HEAD_INIT(name)
+\end{mycode}
+
+其展开如下:
+
+\begin{mycode}{example}
+#define LIST_HEAD_INIT(name) { &(name), &(name) }
+\end{mycode}
+
+这为name字段内的每个指针(prev和next)赋值,使其指向name自身(就像INIT\_LIST\_HEAD做的那样)。
+
+\subsection{创建链表节点}
+
+要创建新节点,只需创建数据结构实例,初始化嵌入在其中的list\_head字段。以汽车为例,其代码如下:
+
+\begin{mycode}{example}
+struct car *blackcar = kzalloc(sizeof(struct car), GFP_KERNEL);
+
+/* 非静态初始化,因为它是嵌入的列表字段 */
+INIT_LIST_HEAD(&blackcar->list);
+\end{mycode}
+
+如前所述,使用的INIT\_LIST\_HEAD是动态分配的链表,它通常是另一个结构的一部分。
+
+\subsection{添加链表节点}
+
+内核提供的list\_add用于向链表添加新项,它是内部函数\_\_list\_add的包装:
+
+\begin{mycode}{example}
+void list_add(struct list_head *new, struct list_head *head);
+static inline void list_add(struct list_head *new, struct list_head *head)
+{
+    __list_add(new, head, head->next);
+}
+\end{mycode}
+
+\_\_list\_add将两个已知项作为参数,在它们之间插入元素。它在内核中的实现非常简单:
+
+\begin{mycode}{example}
+static inline void __list_add(struct list_head *new, struct list_head *prev, struct list_head *next)
+{
+    next->prev = new;
+    new->next = next;
+    new->prev = prev;
+    prev->next = new;
+}
+\end{mycode}
+
+下面的例子在链表中添加两辆车:
+
+\begin{mycode}{添加两辆车}
+list_add(&redcar->list, &carlist);
+list_add(&blue->list, &carlist);
+\end{mycode}
+
+这种模式可以用来实现堆栈。将节点添加到链表的另一个函数,代码如下:
+
+\begin{mycode}{example}
+void list_add_tail(struct list_head *new, struct list_head *head);
+\end{mycode}
+
+这将把指定新项插入链表的末尾。对于之前的例子,可以使用以下代码:
+
+\begin{mycode}{example}
+list_add_tail(&redcar->list, &carlist);
+list_add_tail(&blue->list, &carlist);
+\end{mycode}
+
+这种模式可以用来实现队列。
+
+\subsection{删除链表节点}
+
+内核代码中的链表处理是一项简单的任务。删除节点很简单:
+
+\begin{mycode}{删除节点}
+void list_del(struct list_head *entry);
+\end{mycode}
+
+删除红色车
+
+\begin{mycode}{删除红色车}
+list_del(&redcar->list);
+\end{mycode}
+
+\begin{marker}
+list\_del断开指定节点的prev和next指针,移除该节点。分配给该节点的内存需要使用kfree手动释放。
+\end{marker}
+
+\subsection{链表遍历}
+
+使用宏\Colorbox{lightgrey}{\lstinline{list_for_each_entry(pos, head, member)}}进行链表遍历。
+
+\begin{itemize}
+\item head:链表的头节点。
+\item member:数据结构(在我们的例子中,它是list)中链表struct list\_head的名称。
+\item pos:用于迭代。它是一个循环游标,就像for(i=0; i<foo; i++)中的i。head可以是链表的头节点或任一项,这没关系,因为所处理的是双向链表:
+\begin{mycode}{example}
+struct car *acar; /* loop counter */
+int blue_car_num = 0;
+/* 'list' is the name of the list_head struct in our data structure */
+list_for_each_entry(acar, carlist, list) {
+    if(acar->color == "blue")
+        blue_car_num++;
+}
+\end{mycode}
+\end{itemize}
+
+为什么需要数据结构中list\_head类型字段的名称?请看list\_for\_each\_entry:
+
+\begin{mycode}{example}
+#define list_for_each_entry(pos, head, member)                  \
+for (pos = list_entry((head)->next, typeof(*pos), member);      \
+    &pos->member != (head);                                     \
+    pos = list_entry(pos->member.next, typeof(*pos), member))
+
+#define list_entry(ptr, type, member)                           \
+    container_of(ptr, type, member)
+\end{mycode}
+
+鉴于此,我们可以理解这都是container\_of的功能。另外,还请记住list\_for\_each\_entry\_safe(pos, n, head, member)。
 
 \chapter{设备树的概念}
 
@@ -1223,7 +1766,83 @@ if (IS_ERR(base))
 
 消费者是生成中断的设备。消费者绑定需要以下属性。
 
+\begin{itemize}
+    \item interrupt-parent:对于产生中断的设备节点,这个属性包含指向设备所连接的中断控制器节点的指针phandle。如果省略,则设备从其父节点继承该属性。
+    \item interrupts:它是中断说明符。
+\end{itemize}
 
+中断绑定和中断说明符与中断控制器设备相关联。通过\#interrupt-cells属性定义的中断输入单元数量取决于中断控制器,这是唯一的决定因素。对于i.MX6,中断控制器是全局中断控制器(Global Interrupt Controller,GIC)。在Documentation/devicetree/bindings/arm/gic.txt中很好地解释了其绑定。
+
+1. 中断处理程序
+
+这包括从DT获取IRQ号码,映射到Linux IRQ,再为其注册函数回调。执行此操作的驱动程序代码非常简单:
+
+\begin{mycode}{example}
+int irq = platform_get_irq(pdev, 0);
+ret = request_irq(irq, imx_rxint, 0,
+dev_name(&pdev->dev), sport);
+\end{mycode}
+
+platform\_get\_irq()调用将返回中断号,devm\_request\_irq()可以用这个中断号(之后IRQ在/proc/interrupts中是可见的)。
+
+第二个参数0表示需要在设备节点中指定的第一个中断。如果有多个中断,则可以根据需要的中断更改这个索引,或者只使用命名的资源。在前面的例子中,设备节点包含中断说明符,像下面这样:
+
+\begin{mycode}{example}
+    interrupts = <0 66 IRQ_TYPE_LEVEL_HIGH>;
+\end{mycode}
+
+\begin{itemize}
+    \item 根据ARM GIC,第一个单元说明中断类型。
+    \item 0:共享外设中断(SPI),用于核间共享的中断信号,可由GIC路由至任意核。
+    \item 1:专用外设中断(PPI),专用于单核的中断信号。
+    \item 第二个单元格保存中断号。该中断号取决于中断线是PPI还是SPI。
+    \item 第三个单元,这里的\Colorbox{lightgrey}{\lstinline{IRQ_TYPE_LEVEL_HIGH}}代表感知级别。所有可用的感知级别在include/linux/irq.h中定义。
+\end{itemize}
+
+2. 中断控制器代码
+
+interrupt-controller属性用于将设备声明为中断控制器。\#interruptcells属性定义必须使用多少个单元格来定义单个中断线。
+
+\section{平台驱动程序和DT}
+
+平台驱动程序也使用DT。也就是说,这是现在推荐的处理平台设备的方法,不再需要使用开发板文件,甚至不需要在设备的属性更改时重新编译内核。可否记得,在第5章讨论了OF匹配样式,这是一种基于DT的匹配机制。下面介绍它的工作原理。
+
+“OF匹配风格”是平台核心执行的第一种匹配机制,以匹配设备及其驱动程序。它使用设备树的compatible属性来匹配of\_match\_table中的设备项,设备项是struct driver子结构的一个字段。每个设备节点都有compatible属性,它是字符串或字符串列表。任何驱动程序只要声明compatible属性中列出的字符串之一,就将触发匹配,并看到其probe函数执行。
+
+DT匹配项在内核中被描述为struct of\_device\_id结构的实例,该结构定义在linux/mod\_devicetable.h中,如下所示:
+
+\begin{mycode}{example}
+    // 我们只对结构的最后两个元素感兴趣
+    struct of_device_id {
+        [...]
+        char compatible[128];
+        const void *data;
+    }
+\end{mycode}
+
+该结构中每个元素的含义如下。
+
+\begin{itemize}
+\item char compatible [128]:这是用来匹配DT中设备节点兼容属性的字符串。它们必须完全相同才算匹配。
+\item const void * data:这可以指向任何结构,这个结构可以用作每个设备类型的配置数据。
+\end{itemize}
+
+由于of\_match\_table是指针,因此可以传递struct of\_device\_id数组,使驱动程序兼容多个设备:
+
+\begin{mycode}{example}
+static const struct of_device_id imx_uart_dt_ids[] = {
+    { .compatible = "fsl,imx6q-uart", },
+    { .compatible = "fsl,imx1-uart", },
+    { .compatible = "fsl,imx21-uart", },
+    { /* sentinel */ }
+};
+\end{mycode}
+
+一旦在驱动程序的子结构中填充了ID数组,就必须把它传递到平台驱动程序的of\_match\_table字段:
+
+\chapter{字符设备驱动程序}
+
+\chapter{块设备驱动程序}
 
 \chapter{\texorpdfstring{$I^2C$客户端驱动程序}{I2C客户端驱动程序}}
 
@@ -1258,36 +1877,6 @@ struct i2c\_driver结构包含并描述通用访问例程,这些例程是处理�
 学会如何处理$I^2C$设备驱动程序之后，可以付诸实践了：在市场上选购任一款$I^2C$设备，编写相应的驱动程序，并支持DT。
 
 本章讨论了内核中的$I^2C$内核和相关的API，包括设备树支持，介绍了与$I^2C$设备通信的必要技能。读者现在应该能够编写出高效的probe函数，并注册到$I^2C$内核中了。第8章将使用在这里学到的技能开发SPI设备驱动程序。
-
-\chapter{SPI设备驱动程序}
-
-\chapter{Regmap API——寄存器映射抽象}
-
-\chapter{IIO框架}
-
-\chapter{内核内存管理}
-
-\chapter{DMA——直接内存访问}
-
-\chapter{Linux设备模型}
-
-\chapter{引脚控制和GPIO子系统}
-
-\chapter{GPIO控制器驱动程序——gpio\_chip}
-
-\chapter{高级IRQ管理}
-
-\chapter{输入设备驱动程序}
-
-\chapter{RTC驱动程序}
-
-\chapter{PWM驱动程序}
-
-\chapter{调节器框架}
-
-\chapter{帧缓冲驱动程序}
-
-\chapter{网络接口卡驱动程序}
 
 \part{Linux移植}
 
@@ -1627,206 +2216,7 @@ atguigu-pi>wpa_supplicant -B -i wlan0 -c your_SSID.conf
 
 \part{驱动程序举例}
 
-\chapter{Linux Demo驱动程序开发}
 
-本文描述了基于全志V3S开发板的简单驱动程序和测试应用程序的设计流程。我们设计的驱动程序和测试程序极其简单，适合初学者上手学习。
-
-软件运行的硬件环境是基于V3S开发板中的全志V3S处理器，该处理器集成了一个1.2GHz工作主频的单ARM CortexTM-A7 核，芯片内部集成了64MB DRAM 存储器。
-
-设计流程概述
-
-\begin{enumerate}
-    \item 步骤一：编写一个\Colorbox{lightgrey}{\lstinline{demo_driver.c}}的驱动程序。
-    \item 步骤二：编写makefile文件。
-    \item 步骤三：编写一个\Colorbox{lightgrey}{\lstinline{demo_app.c}}的应用程序。
-    \item 步骤四：在V3S开发板中安装\Colorbox{lightgrey}{\lstinline{demo_driver}}驱动程序，并测试\Colorbox{lightgrey}{\lstinline{demo_app}}应用程序。
-\end{enumerate}
-
-linux系统是一个分层结构，我们设计的\Colorbox{lightgrey}{\lstinline{demo_driver}}位于内核中的驱动部分，\Colorbox{lightgrey}{\lstinline{demo_app}}位于用户级。
-
-\section{编写驱动程序}
-
-编写一个\Colorbox{lightgrey}{\lstinline{demo_driver.c}}的驱动程序，驱动程序源码如下：
-
-\begin{mycode}{demo\_driver.c}
-#include <linux/module.h>
-#include <linux/kernel.h>
-#include <linux/fs.h>
-#include <linux/init.h>
-
-#define    DRIVER_MAJOR     188
-#define    DEVICE_NAME     "demo_driver"
-
-static int demo_open(struct inode *inode, struct file *file)
-{    
-    printk(KERN_EMERG "open\n");
-    return 0;
-}
-
-static ssize_t demo_write(struct file *file, const char __user * buf, size_t count, loff_t *ppos)
-{
-    printk(KERN_EMERG "write\n");
-    return 0;
-}
-static ssize_t demo_read(struct file *file,  char __user * buf, size_t count, loff_t *ppos)
-{
-    printk(KERN_EMERG "read\n");  
-    return 0;
-}
-
-static int demo_close(struct inode *inode, struct file *file)
-{
-    printk(KERN_EMERG "close\n");
-    return 0;
-}
-
-static struct file_operations demo_flops = 
-{
-    .owner  =   THIS_MODULE,
-    .open   =   demo_open,     
-    .write  =   demo_write,
-    .read     =      demo_read,
-    .release =  demo_close,
-};
-
-static int __init demo_init(void)
-{
-    int ret;
-         
-    //注册设备
-    ret = register_chrdev(DRIVER_MAJOR,DEVICE_NAME, &demo_flops);
-
-    if (ret < 0) 
-    {
-      printk(KERN_EMERG DEVICE_NAME " can't register major number.\n");
-      return ret;
-    }
-    else
-    {
-        printk(KERN_EMERG DEVICE_NAME "demo init\n");
-    }
-
-    return 0;
-}
-
-static void __exit demo_exit(void)
-{
-    unregister_chrdev(DRIVER_MAJOR, DEVICE_NAME);
-    printk(KERN_EMERG DEVICE_NAME "demo exit\n");
-}
-
-module_init(demo_init);
-module_exit(demo_exit);
-MODULE_LICENSE("GPL");
-\end{mycode}
-
-编译驱动程序依赖linux内核源码环境，需要把驱动C文件放在linux源码目录中，通过编译linux内核的方式得到驱动ko文件。
-
-为了得到驱动ko，我们在linux/drivers/char目录下面创建一个demo\_driver的文件夹。
-
-然后把demo\_driver.c程序拷贝到demo\_driver的文件夹中。
-
-\section{编写Makefile}
-
-我们通过编译linux内核的方式得到驱动ko文件，为了在编译内核时得到相应的驱动，我们需要在linux内核代码中增加和修改Makefile文件（Makefile的作用指定了工程编译的方法和步骤）。
-
-首先我们修改linux/drivers/char目录下Makefile文件，在Makefile文件内容最末行加入一行代码：
-
-\begin{mycode}{添加一行代码}
-obj += demo_driver/
-\end{mycode}
-
-这句代码的意思是：编译内核时，子目录demo\_driver/下的文件也将进行编译。
-
-我们在linux/drivers/char/demo\_driver中创建一个Makefile文件，同时在Makefile文件中加入一行代码：
-
-\begin{mycode}{Makefile}
-obj-m += demo_driver.o
-\end{mycode}
-
-这句代码的意思是：编译当前目录中的demo\_driver.c文件，输出一个demo\_driver.ko的驱动文件。
-
-准备好demo\_driver.c文件和Makefile文件后，我们执行编译内核指令。
-
-经过上述一波操作，我们得到了demo\_driver.ko的驱动文件。
-
-\section{编写应用程序}
-
-编写一个demo\_app.c的应用程序，程序源码如下：
-
-\begin{mycode}{demo\_app.c}
-#include <stdio.h> 
-#include <string.h> 
-#include <stdlib.h>
-#include <sys/types.h>
-#include <sys/stat.h> 
-#include <fcntl.h> 
-#include <unistd.h>
-
-int main(int arvc, char *argv[])
-{
-    int fd;
-    int value = 0;
-    printf("demo test\n");
-
-    /// 打开驱动
-    fd = open("/dev/demo_driver", O_RDWR);
-
-    while(1)
-    {
-        /// 执行驱动读操作
-        read(fd, &value, 4);
-        sleep(1);
-        /// 执行驱动写操作
-        write(fd, &value, 4);
-        sleep(1);    
-        
-        printf("demo run\n");
-    }
-    return 0;
-}
-\end{mycode}
-
-然后编译应用程序。
-
-\begin{mycode}{shell}
-arm-linux-gnueabihf-gcc -o demo_app demo_app.c
-\end{mycode}
-
-于是我们得到一个demo\_app可执行文件。
-
-然后将得到的两个二进制\Colorbox{lightgrey}{\lstinline{demo_driver.ko}}和\Colorbox{lightgrey}{\lstinline{demo_app}}拷贝到我们的嵌入式系统里面。
-
-安装驱动：
-
-\begin{mycode}{安装驱动}
-    $ insmod demo_driver.ko
-    # 执行创建文件节点指令
-    $ mknod /dev/demo_driver c 188 0
-    # 查看驱动设备
-    $ ls /dev
-\end{mycode}
-
-188的是设备号，我们在设计的驱动C文件中有如下定义：
-
-\begin{mycode}{设备号定义}
-/**********************************************************************************************************
-Define
-**********************************************************************************************************/
-#define    DRIVER_MAJOR     188
-#define    DEVICE_NAME     "demo_driver"
-\end{mycode}
-
-执行\Colorbox{lightgrey}{\lstinline{demo_app}}程序：
-
-\begin{mycode}{执行程序}
-$ chmod 777 demo_app
-$ ./demo_app
-\end{mycode}
-
-\begin{marker}
-    如果重启设备，则需要重新加载驱动。
-\end{marker}
 
 \chapter{V3S按键驱动}
 
