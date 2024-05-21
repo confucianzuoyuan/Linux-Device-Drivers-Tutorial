@@ -596,7 +596,279 @@ MODULE_INFO(my_field_name, "What eeasy value");
 
 在给定模块上执行\Colorbox{lightgrey}{\lstinline{objdump -d -j .modinfo}}命令可以转储内核模块.modeinfo部分的内容，如图2-3所示。
 
+modinfo部分可以看作模块的数据表。实际格式化打印信息的用户空间工具是modinfo，如图2-4所示。
+
+除自定义信息之外，还应该提供标准信息，内核为这些信息提供了宏，包括许可、模块作者、参数描述、模块版本和模块描述。
+
+1. 许可
+
+模块的许可由MODULE\_LICENSE()宏定义：
+
+\begin{mycode}{许可}
+MODULE_LICENSE ("GPL");
+\end{mycode}
+
+应该如何与其他开发人员共享(或不共享)许可定义源代码。MODULE\_LICENSE()告诉内核模块采用何种许可。它对模块行为有影响，因为与GPL不兼容的许可将导致模块不能通过EXPORT\_SYMBOL\_GPL()宏看到/使用内核导出的服务/函数，这个宏只对GPL兼容模块显示符号，这与EXPORT\_SYMBOL()相反，后者为具有任何许可的模块导出函数。加载GPL不兼容模块也会导致内核被污染，这意味着已经加载非开源或不可信代码，可能没有社区支持。请记住，没有MODULE\_LICENSE()的模块被认为是非开源的，也会污染内核。以下摘自include/linux/module.h，描述了内核支持的许可：
+
+\begin{mycode}{内核支持的许可}
+/*
+* The following license indents are currently accepted as indicating free
+* software modules
+*
+* "GPL"                              [GNU Public License v2 or later]
+* "GPL v2"                           [GNU Public License v2]
+* "GPL and additional rights"        [GNU Public License v2 rights and more]
+* "Dual BSD/GPL"                     [GNU Public License v2 or BSD license choice]
+* "Dual MIT/GPL"                     [GNU Public License v2 or MIT license choice]
+* "Dual MPL/GPL"                     [GNU Public License v2 or Mozilla license choice]
+*
+* The following other idents are available
+*
+* "Proprietary"                      [Non free products]
+*
+* There are dual licensed components, but when running with Linux it is the
+* GPL that is relevant so this is a non issue. Similarly LGPL linked with GPL
+* is a GPL combined work.
+*
+* This exists for several reasons
+* 1. So modinfo can show license info for users wanting to vet their setup is free
+* 2. So the community can ignore bug reports including proprietary modules
+* 3. So vendors can do likewise based on their own policies
+*/
+\end{mycode}
+
+\begin{marker}
+    模块至少必须与GPL兼容，才能享受完整的内核服务。
+\end{marker}
+
+2. 模块作者
+
+MODULE\_AUTHOR()声明模块的作者：
+
+\begin{mycode}{模块作者}
+MODULE_AUTHOR("John Madieu <john.madieu@gmail.com>");
+\end{mycode}
+
+作者可能有多个，在这种情况下，每个作者必须用MODULE\_AUTHOR()声明：
+
+\begin{mycode}{多个模块作者}
+MODULE_AUTHOR("John Madieu <john.madieu@gmail.com>");
+MODULE_AUTHOR("Lorem Ipsum <l.ipsum@foobar.com>");
+\end{mycode}
+
+3. 模块描述
+
+MODULE\_DESCRIPTION()简要描述模块的功能：
+
+\begin{mycode}{模块描述}
+MODULE_DESCRIPTION("Hello, world! Module");
+\end{mycode}
+
+\section{错误和消息打印}
+
+错误代码由内核或用户空间应用程序(通过errno变量)解释。错误处理在软件开发中非常重要,而不仅仅是在内核开发中。幸运的是,内核提供的几种错误,几乎涵盖了可能会遇到的所有错误,有时需要把它们打印出来以帮助进行调试。
+
+\subsection{错误处理}
+
+为给定的错误返回错误代码会导致内核或用户空间应用产生不必要的行为,从而做出错误的决定。为了保持清楚,内核树中预定义的错误几乎涵盖了我们可能遇到的所有情况。一些错误(及其含义)在include/uapi/asm-generic/errno-base.h中定义,列表的其余错误可以在include/uapi/asm-generic/errno.h中找到。以下是从include/uapi/asm-generic/errno-base.h中摘录的错误列表:
+
+\begin{mycode}{错误编码}
+#define  EPERM       1    /* 操作不允许 */
+#define  ENOENT      2    /* 没有这样的文件或者目录 */
+#define  ESRCH       3    /* 没有这样的进程 */
+#define  EINTR       4    /* 中断系统调用 */
+#define  EIO         5    /* I/O错误 */
+#define  ENXIO       6    /* 没有这样的设备或地址 */
+#define  E2BIG       7    /* 参数列表太长 */
+#define  ENOEXEC     8    /* Exec格式错误 */
+#define  EBADF       9    /* 错误的文件数量*/
+#define  ECHILD      10   /* 没有子进程 */
+#define  EAGAIN      11   /* 再试一次 */
+#define  ENOMEM      12   /* 内存不足 */
+#define  EACCES      13   /* 没有权限 */
+#define  EFAULT      14   /* 错误的地址 */
+#define  ENOTBLK     15   /* 块设备要求*/
+#define  EBUSY       16   /* 设备或资源忙 */
+#define  EEXIST      17   /* 文件已存在 */
+#define  EXDEV       18   /* 跨设备的链接 */
+#define  ENODEV      19   /* 没有这样的设备 */
+#define  ENOTDIR     20   /* 不是目录 */
+#define  EISDIR      21   /* 是目录 */
+#define  EINVAL      22   /* 无效参数 */
+#define  ENFILE      23   /* 文件表溢出*/
+#define  EMFILE      24   /* 打开的文件太多 */
+#define  ENOTTY      25   /* 不是打字机 */
+#define  ETXTBSY     26   /* 文本文件忙 */
+#define  EFBIG       27   /* 文件太大 */
+#define  ENOSPC      28   /* 设备上没有空间了 */
+#define  ESPIPE      29   /* 非法寻求 */
+#define  EROFS       30   /* 只读文件系统 */
+#define  EMLINK      31   /* 链接太多 */
+#define  EPIPE       32   /* 破坏的管道 */
+#define  EDOM        33   /* 函数域外的数学参数 */
+#define  ERANGE      34   /* 数学结果无法表示 */
+\end{mycode}
+
+大多情况下,经典的返回错误方式是这种形式:return -ERROR,特别是在响应系统调用时。例如,对于I/O错误,错误代码是EIO,应该执行的语句是return -EIO:
+
+\begin{mycode}{错误返回}
+dev = init(&ptr);
+if (!dev)
+    return -EIO;
+\end{mycode}
+
+错误有时会跨越内核空间,传播到用户空间。如果返回的错误是对系统调用(open、read、ioctl、mmap)的响应,则该值将自动赋给用户空间errno全局变量,在该变量上调用strerror(errno)可以将错误转换为可读字符串:
+
+\begin{mycode}{code}
+#include <errno.h> /* to access errno global variable */
+#include <string.h>
+[...]
+if(write(fd, buf, 1) < 0) {
+    printf("something gone wrong! %s\n", strerror(errno));
+}
+[...]
+\end{mycode}
+
+当遇到错误时,必须撤销在这个错误发生之前的所有设置。通常的做法是使用goto语句:
+
+\begin{mycode}{使用goto进行错误处理}
+ptr = kmalloc(sizeof (device_t));
+if(!ptr) {
+    ret = -ENOMEM;
+    goto err_alloc;
+}
+
+dev = init(&ptr);
+
+if(dev) {
+    ret = -EIO
+    goto err_init;
+}
+
+return 0;
+
+err_init:
+    free(ptr);
+err_alloc:
+    return ret;
+\end{mycode}
+
+使用goto语句的原因很简单。当处理错误时,假设错误出现在第5步,则必须清除以前的操作(步骤1~步骤4)。而不是像下面这样执行大量的嵌套检查操作:
+
+\begin{mycode}{嵌套处理}
+if (ops1() != ERR) {
+    if (ops2() != ERR) {
+        if ( ops3() != ERR) {
+            if (ops4() != ERR) {
+\end{mycode}
+
+这可能会令人困惑,并可能导致缩进问题。像下面这样用goto语句会使控制流程显得更直观,这种方法更受欢迎:
+
+\begin{mycode}{goto处理错误}
+if (ops1() == ERR) // |
+    goto error1;   // |
+if (ops2() == ERR) // |
+    goto error2;   // |
+if (ops3() == ERR) // |
+    goto error3;   // |
+if (ops4() == ERR) // V
+    goto error4;
+error5:
+[...]
+error4:
+[...]
+error3:
+[...]
+error2:
+[...]
+error1:
+[...]
+\end{mycode}
+
+这就是说应该只在函数中使用goto跳转。
+
+\subsection{处理空指针错误}
+
+当返回指针的函数返回错误时,通常返回的是NULL指针。而去检查为什么会返回空指针是没有任何意义的,因为无法准确了解为什么会返回空指针。为此,内核提供了3个函数ERR\_PTR、IS\_ERR和PTR\_ERR:
+
+\begin{mycode}{处理空指针错误}
+void *ERR_PTR(long error);
+long IS_ERR(const void *ptr);
+long PTR_ERR(const void *ptr);
+\end{mycode}
+
+第一个函数实际上把错误值作为指针返回。假若函数在内存申请失败后要执行语句return -ENOMEM,则必须改为这样的语句:return ERR\_PTR (-ENOMEM);。第二个函数用于检查返回值是否是指针错误:if(IS\_ERR(foo))。最后一个函数返回实际错误代码:return PTR\_ERR(foo);。以下是一个例子,说明如何使用ERR\_PTR、IS\_ERR和PTR\_ERR:
+
+\begin{mycode}{example}
+static struct iio_dev *indiodev_setup(){
+    [...]
+    struct iio_dev *indio_dev;
+    indio_dev = devm_iio_device_alloc(&data->client->dev, sizeof(data));
+    if (!indio_dev)
+        return ERR_PTR(-ENOMEM);
+    [...]
+    return indio_dev;
+}
+
+static int foo_probe([...]){
+    [...]
+    struct iio_dev *my_indio_dev = indiodev_setup();
+    if (IS_ERR(my_indio_dev))
+        return PTR_ERR(data->acc_indio_dev);
+    [...]
+}
+\end{mycode}
+
+\begin{marker}
+关于错误处理补充一点,摘录自内核编码风格部分:如果函数名称是动作或命令式命令,则函数返回的错误代码应该是整数;如果函数名称是一个谓词,则该函数应返回布尔值succeeded(成功的)。例如,add
+work是一个命令,add\_work()函数返回0表示成功,返回-EBUSY表示失败。同样,PCI device present是谓词,pci\_dev\_present()函数如果成功找到匹配设备,则返回1;否则返回0。
+\end{marker}
+
+\subsection{消息打印——printk()}
+
+printk()是在内核空间使用的,其作用和在用户空间使用printf()一样,执行dmesg命令可以显示printk()写入的行。根据所打印消息的重要性不同,可以选用include/linux/kern\_levels.h中定义的八个级别的日志消息,下面将介绍它们的含义。
+
+下面列出的是内核日志级别,每个级别对应一个字符串格式的数字,其优先级与该数字的值成反比。例如,0具有较高的优先级:
+
+\begin{mycode}{日志级别}
+#define KERN_SOH                "\001"          /* ASCII头开始 */
+#define KERN_SOH_ASCII          '\001'
+#define KERN_EMERG              KERN_SOH "0"    /* 系统不可用 */
+#define KERN_ALERT              KERN_SOH "1"    /* 必须立即采取行动 */
+#define KERN_CRIT               KERN_SOH "2"    /* 重要条件 */
+#define KERN_ERR                KERN_SOH "3"    /* 错误条件 */
+#define KERN_WARNING            KERN_SOH "4"    /* 警报条件 */
+#define KERN_NOTICE             KERN_SOH "5"    /* 正常但重要的情况 */
+#define KERN_INFO               KERN_SOH "6"    /* 信息 */
+#define KERN_DEBUG              KERN_SOH "7"    /* 调试级别的信息 */
+\end{mycode}
+
+以下代码显示如何打印内核消息和日志级别:
+
+\begin{mycode}{example}
+    printk(KERN_ERR "This is an error\n");
+\end{mycode}
+
+如果省略调试级别(printk("This is an error\n")),则内核将根据CONFIG\_DEFAULT\_MESSAGE\_LOGLEVEL配置选项(这是默认的内核日志级别)向该函数提供一个调试级别。实际上可以使用以下宏,其名称更有意义,它们是对前面所定义内容的包装——pr\_emerg、pr\_alert、pr\_crit、pr\_err、pr\_warning、pr\_notice、pr\_info和pr\_debug:
+
+\begin{mycode}{example}
+    pr_err("This is the same error\n");
+\end{mycode}
+
+对于新开发的驱动程序,建议使用这些包装。printk()的实现是这样的:调用它时,内核会将消息日志级别与当前控制台的日志级别进行比较;如果前者比后者更高(值更低),则消息会立即打印到控制台。可以这样检查日志级别参数:
+
+\begin{mycode}{检查日志级别}
+    cat /proc/sys/kernel/printk
+    4 4 1 7
+\end{mycode}
+
+上面的输出中,第一个值是当前日志级别(4),第二个值是按照CONFIG\_DEFAULT\_MESSAGE\_LOGLEVEL选项设置的默认值。其他值与本章内容无关,可以忽略。
+
+内核日志级别列表如下:
+
 \chapter{内核工具和辅助函数}
+
+
 
 \chapter{字符设备驱动程序}
 
