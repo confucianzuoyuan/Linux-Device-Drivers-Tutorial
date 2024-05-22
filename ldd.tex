@@ -769,13 +769,13 @@ if (ops1() != ERR) {
 这可能会令人困惑,并可能导致缩进问题。像下面这样用goto语句会使控制流程显得更直观,这种方法更受欢迎:
 
 \begin{mycode}{goto处理错误}
-if (ops1() == ERR) // |
-    goto error1;   // |
-if (ops2() == ERR) // |
-    goto error2;   // |
-if (ops3() == ERR) // |
-    goto error3;   // |
-if (ops4() == ERR) // V
+if (ops1() == ERR)
+    goto error1;
+if (ops2() == ERR)
+    goto error2;
+if (ops3() == ERR)
+    goto error3;
+if (ops4() == ERR)
     goto error4;
 error5:
 [...]
@@ -859,7 +859,7 @@ printk()是在内核空间使用的,其作用和在用户空间使用printf()一
     printk(KERN_ERR "This is an error\n");
 \end{mycode}
 
-如果省略调试级别(\Colorbox{lightgrey}{\lstinline{printk("This is an error\n")}}),则内核将根据CONFIG\_DEFAULT\_MESSAGE\_LOGLEVEL配置选项(这是默认的内核日志级别)向该函数提供一个调试级别。实际上可以使用以下宏,其名称更有意义,它们是对前面所定义内容的包装——pr\_emerg、pr\_alert、pr\_crit、pr\_err、pr\_warning、pr\_notice、pr\_info和pr\_debug:
+如果省略调试级别(\Colorbox{lightgrey}{\lstinline{printk("This is an error\n")}}),则内核将根据\Colorbox{lightgrey}{\lstinline{CONFIG_DEFAULT_MESSAGE}}\break\Colorbox{lightgrey}{\lstinline{_LOGLEVEL}}配置选项(这是默认的内核日志级别)向该函数提供一个调试级别。实际上可以使用以下宏,其名称更有意义,它们是对前面所定义内容的包装——pr\_emerg、pr\_alert、pr\_crit、pr\_err、pr\_warning、pr\_notice、pr\_info和pr\_debug:
 
 \begin{mycode}{example}
     pr_err("This is the same error\n");
@@ -875,6 +875,32 @@ printk()是在内核空间使用的,其作用和在用户空间使用printf()一
 上面的输出中,第一个值是当前日志级别(4),第二个值是按照CONFIG\_DEFAULT\_MESSAGE\_LOGLEVEL选项设置的默认值。其他值与本章内容无关,可以忽略。
 
 内核日志级别列表如下:
+
+\begin{mycode}{example}
+/* integer equivalents of KERN_<LEVEL> */
+#define LOGLEVEL_SCHED   -2 /* 计划代码中的延迟消息设置为此特殊级别 */
+#define LOGLEVEL_DEFAULT -1 /* 默认(或最新)日志级别 */
+#define LOGLEVEL_EMERG    0 /* 系统不可用 */
+#define LOGLEVEL_ALERT    1 /* 必须立即采取行动 */
+#define LOGLEVEL_CRIT     2 /* 重要条件 */
+#define LOGLEVEL_ERR      3 /* 错误条件 */
+#define LOGLEVEL_WARNING  4 /* 警报条件 */
+#define LOGLEVEL_NOTICE   5 /* 正常但重要的情况 */
+#define LOGLEVEL_INFO     6 /* 信息 */
+#define LOGLEVEL_DEBUG    7 /* 调试级别信息 */
+\end{mycode}
+
+当前日志级别可以这样更改:
+
+\begin{mycode}{example}
+# echo <level> > /proc/sys/kernel/printk
+\end{mycode}
+
+\begin{marker}
+printk()永远不会阻塞,即使在原子上下文中调用也足够安全。它会尝试锁定控制台打印消息。如果锁定失败,输出则被写入缓冲区,函数返回,永不阻塞。然后通知当前控制台占有者有新的消息,在它释放控制台之前打印它们。
+\end{marker}
+
+内核也支持其他调试方法:动态调试或者在文件的顶部使用\Colorbox{lightgrey}{\lstinline{#define DEBUG}}。对这种调试方式感兴趣的人可以参考以下内核文档:Documentation/dynamic-debug-howto.txt。
 
 \chapter{一个完整的最简单的驱动Demo}
 
