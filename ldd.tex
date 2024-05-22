@@ -2069,7 +2069,25 @@ if (result < 0) {
     \item \Colorbox{lightgrey}{\lstinline{ssize_t (*sendpage) (struct file *, struct page *, int, size_t, loff_t *, int);}}：sendpage 是 sendfile 的另一半；它由内核调用来发送数据，一次一页，到对应的文件。设备驱动实际上不实现 sendpage 。
     \item \Colorbox{lightgrey}{\lstinline{unsigned long (*get_unmapped_area)(struct file *, unsigned long, unsigned long, unsigned long, unsigned long);}}：这个方法的目的是在进程的地址空间找一个合适的位置来映射在底层设备上的内存段中。这个任务通常由内存管理代码进行；这个方法存在为了使驱动能强制特殊设备可能有的任何的对齐请求。大部分驱动可以置这个方法为 NULL 。
     \item \Colorbox{lightgrey}{\lstinline{int (*check_flags)(int)}}：这个方法允许模块检查传递给 \Colorbox{lightgrey}{\lstinline{fnctl(F_SETFL...)}} 调用的标志。
+    \item \Colorbox{lightgrey}{\lstinline{int (*dir_notify)(struct file *, unsigned long);}}：这个方法在应用程序使用 fcntl 来请求目录改变通知时调用。只对文件系统有用；驱动不需要实现 dir\_notify。
 \end{itemize}
+
+scull 设备驱动只实现了最重要的设备方法。它的\Colorbox{lightgrey}{\lstinline{file_operations}}结构是如下初始化的：
+
+\begin{mycode}{初始化}
+  struct file_operations scull_fops = {
+    .owner = THIS_MODULE,
+    .llseek = scull_llseek,
+    .read = scull_read,
+    .write = scull_write,
+    .ioctl = scull_ioctl,
+    .open = scull_open,
+    .release = scull_release,
+  };
+\end{mycode}
+
+这个声明使用标准的 C 标记式结构初始化语法。这个语法是首选的，因为它使驱动在结构定义的改变之间更加可移植，并且，有争议地，使代码更加紧凑和可读。标记式初始化允许结构成员重新排序; 在某种情况下, 真实的性能提高已经
+实现, 通过安放经常使用的成员的指针在相同硬件高速存储行中
 
 \chapter{块设备驱动程序}
 
