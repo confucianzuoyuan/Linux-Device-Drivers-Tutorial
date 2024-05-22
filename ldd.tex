@@ -2120,6 +2120,17 @@ inode 结构包含大量关于文件的信息。作为一个通用的规则，�
   \item \Colorbox{lightgrey}{\lstinline{struct cdev *i_cdev;}}：struct cdev 是内核的内部结构，代表字符设备；这个成员包含一个指针，指向这个结构。当节点指的是一个字符设备文件时。
 \end{itemize}
 
+内核作者添加了 2 个宏，可以用来从一个 inode 中获取主次编号：
+
+\begin{mycode}{宏}
+unsigned int iminor(struct inode *inode);
+unsigned int imajor(struct inode *inode);
+\end{mycode}
+
+\section{注册字符设备}
+
+如我们提过的，内核在内部使用类型 struct cdev 的结构来代表字符设备。在内核调用你的设备操作前，你编写分配并注册一个或几个这些结构。为此，你的代码应当包含 <linux/cdev.h>，这个结构和它的关联帮助函数定义在这里。
+
 \chapter{块设备驱动程序}
 
 \chapter{\texorpdfstring{$I^2C$客户端驱动程序}{I2C客户端驱动程序}}
