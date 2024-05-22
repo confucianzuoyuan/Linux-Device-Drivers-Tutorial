@@ -803,7 +803,11 @@ long PTR_ERR(const void *ptr);
 
 第一个函数实际上把错误值作为指针返回。假若函数在内存申请失败后要执行语句return -ENOMEM,则必须改为这样的语句:return ERR\_PTR (-ENOMEM);。
 
-第二个函数用于检查返回值是否是指针错误:if(IS\_ERR(foo))。最后一个函数返回实际错误代码:return PTR\_ERR(foo);。以下是一个例子,说明如何使用ERR\_PTR、IS\_ERR和PTR\_ERR:
+第二个函数用于检查返回值是否是指针错误：\Colorbox{lightgrey}{\lstinline{if (IS_ERR(foo))}}。
+
+最后一个函数返回实际错误代码：\Colorbox{lightgrey}{\lstinline{return PTR_ERR(foo);}}。
+
+以下是一个例子,说明如何使用\Colorbox{lightgrey}{\lstinline{ERR_PTR}}、\Colorbox{lightgrey}{\lstinline{IS_ERR}}和\Colorbox{lightgrey}{\lstinline{PTR_ERR}}：
 
 \begin{mycode}{example}
 static struct iio_dev *indiodev_setup(){
@@ -1995,6 +1999,54 @@ grep -q '^staff:' /etc/group || group="wheel"
 chgrp $group /dev/${device}[0-3]
 chmod $mode /dev/${device}[0-3]
 \end{mycode}
+
+这个脚本可以通过重定义变量和调整 mknod 行来适用于另外的驱动。这个脚本仅仅展示了创建 4 个设备，因为 4 是 scull 源码中缺省的。
+
+脚本的最后几行可能有些模糊：为什么改变设备的组和模式？理由是这个脚本必须由超级用户运行，因此新建的特殊文件由 root 拥有。许可位缺省的是只有 root 有写权限，而任何人都可以读。通常，一个设备节点需要一个不同的读写策略，因此在某些方面别人的存取权限必须改变。我们的脚本缺省是给一个用户组读写，但是你的需求可能不同。
+
+还有一个 scull\_unload 脚本来清理 /dev 目录并去除模块。作为对使用一对脚本来加载和卸载的另外选择，你可以编写一个 init 脚本，准备好放在你的发布使用这些脚本的目录中。作为 scull 源码的一部分，我们提供了一个相当完整和可配置的 init 脚本例子，称为 scull.init；它接受传统的参数 —— start，stop，和 restart —— 并且完成 scull\_load 和 scull\_unload
+的角色。
+
+如果反复创建和销毁 /dev 节点，听来过分了，有一个有用的办法。如果你在加载和卸载单个驱动，你可以在你第一次使用你的脚本创建特殊文件之后，只使用 rmmod 和 insmod：这样动态编号不是随机的。并且你每次都可以使用所选的同一个编号，如果你不加载任何别的动态模块。在开发中避免长脚本是有用的。但是这个技巧，显然不能扩展到一次多于一个驱动。安排主编号最好的方式，我们认为，是缺省使用动态分配，而留给自己在加载时指定主编号的选项权，或者甚至在编译时。scull 实现以这种方式工作；它使用一个全局变量，scull\_major，来持有选定的编号（还有一个 scull\_minor 给次编号）。这个变量初始化为 SCULL\_MAJOR，定义在 scull.h 。发布的源码中的 SCULL\_MAJOR 的缺省值是 0，意思是``使用动态分配''。用户可以接受缺省值或者选择一个特殊主编号，或者在编译前修改宏定义或者在 insmod 命令行指定一个值给 scull\_major 。最后，通过使用 scull\_load 脚本，用户可以在 scull\_load 的命令行传递参数给 insmod 。
+
+下面是 scull.c 中用来获取主设备号的代码：
+
+\begin{mycode}{获取主设备号}
+if (sucll_major) {
+    dev = MKDEV(scull_major, scull_minor);
+    result = register_chrdev_region(dev, scull_nr_devs, "scull");
+} else {
+    result = alloc_chrdev_region(&dev, scull_minor, scull_nr_devs, "scull");
+    scull_major = MAJOR(dev);
+}
+if (result < 0) {
+    printk(KERN_WARNING "scull: can't get major %d\n", scull_major);
+    return result;
+}
+\end{mycode}
+
+本书使用的几乎所有例子驱动使用类似的代码来分配它们的主编号。
+
+\section{一些重要的数据结构}
+
+如同你想象的，注册设备编号仅仅是驱动代码必须进行的诸多任务中的第一个。我们将很快看到其他重要的驱动组件，但首先需要涉及一个别的。大部分的基础性的驱动操作包括 3 个重要的内核数据结构，称为 file\_operations，file，和 inode 。需要对这些结构的基本了解才能够做大量感兴趣的事情，因此我们现在在进入如何实现基础性驱动操作的细节之前，会快速查看每一个。
+
+\subsection{文件操作}
+
+到现在，我们已经保留了一些设备编号给我们使用，但是我们还没有连接任何我们设备操作到这些编号上。file\_operation 结构是一个字符驱动如何建立这个连接。这个结构，定义在 <linux/fs.h> ，是一个函数指针的集合。每个打开文件（内部用一个 file 结构来代表，稍后我们会查看）与它自身的函数集合相关连（通过包含一个称为 f\_op 的成员，它指向一个 file\_operations 结构）。这些操作大部分负责实现系统调用，因此，命名为 open，read，等等。我们可以认为文件是一个``对象''并且其上的函数操作称为它的``方法''，使用面向对象编程的术语来表示一个对象声明的用来操作对象的动作。这是我们在 Linux 内核中看到的第一个面向对象编程的现象，后续章中我们会看到更多。
+
+传统上，一个 file\_operation 结构或者其一个指针称为 fops（或者它的一些变体）。结构中的每个成员必须指向驱动中的函数，这些函数实现一个特别的操作，或者对于不支持的操作留置为 NULL 。当指定为 NULL 指针时内核的确切的行为是每个函数不同的，如同本节后面的列表所示。
+
+下面的列表介绍了一个应用程序能够在设备上调用的所有操作。我们已经试图保持列表简短，这样它可作为一个参考，只是总结每个操作和在 NULL 指针使用时的缺省内核行为。
+
+在你通读 file\_operations 方法的列表时，你会注意到不少参数包含字串 \_\_user 。这种注解是一种文档形式，注意，一个指针是一个不能被直接解引用的用户空间地址。对于正常的编译，\_\_user 没有效果，但是它可被外部检查软件使用来找出对用户空间地址的错误使用。
+
+本章剩下的部分，在描述一些其他重要数据结构后，解释了最重要操作的角色并且给了提示，告诫和真实代码例子。我们推迟讨论更复杂的操作到后面章节，因为我们还不准备深入如内存管理，阻塞操作，和异步通知。
+
+\begin{itemize}
+    \item \Colorbox{lightgrey}{\lstinline{scull module *owner}}：第一个 file\_operations 字段并不是一个操作；相反，它是指向``拥有''该结构的模块的指针。内核使用这个字段以避免在模块的操作正在被使用时卸载该模块。几乎在所有的情况下，该成员都会被初始化为 \Colorbox{lightgrey}{\lstinline{THIS_MODULE}} ，它是定义在<linux/module.h>中的一个宏。
+    \item \Colorbox{lightgrey}{\lstinline{loff_t (*llseek) (struct file *, loff_t, int);}}：llseek 方法用作改变文件中的当前读/写位置，并且新位置作为（正的）返回值。loff\_t 参数是一个``long offset''，并且就算在 32 位平台上也至少 64 位宽。错误由一个负返回值指示。如果这个函数指针是 NULL，seek 调用会以潜在地无法预知的方式修改 file 结构中的位置计数器。
+\end{itemize}
 
 \chapter{块设备驱动程序}
 
