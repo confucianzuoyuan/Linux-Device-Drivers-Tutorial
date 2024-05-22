@@ -2067,8 +2067,8 @@ if (result < 0) {
 这些方法实现发散/汇聚读和写操作。应用程序偶尔需要做一个包含多个内存区的单个读或写操作；这些系统调用允许它们这样做而不必对数据进行额外拷贝。如果这些函数指针为 NULL ，read 和 write 方法被调用（可能多于一次）。
     \item \Colorbox{lightgrey}{\lstinline{ssize_t (*sendfile)(struct file *, loff_t *, size_t, read_actor_t, void *);}}：这个方法实现 sendfile 系统调用的读，使用最少的拷贝从一个文件描述符搬移数据到另一个。例如，它被一个需要发送文件内容到一个网络连接的 web 服务器使用。设备驱动常常使 sendfile 为 NULL。
     \item \Colorbox{lightgrey}{\lstinline{ssize_t (*sendpage) (struct file *, struct page *, int, size_t, loff_t *, int);}}：sendpage 是 sendfile 的另一半；它由内核调用来发送数据，一次一页，到对应的文件。设备驱动实际上不实现 sendpage 。
-    \item \Colorbox{lightgrey}{\lstinline{unsigned long (*get_unmapped_area)(struct file *, unsigned long, unsigned long, unsigned long,
-    unsigned long);}}：这个方法的目的是在进程的地址空间找一个合适的位置来映射在底层设备上的内存段中。这个任务通常由内存管理代码进行；这个方法存在为了使驱动能强制特殊设备可能有的任何的对齐请求。大部分驱动可以置这个方法为 NULL 。
+    \item \Colorbox{lightgrey}{\lstinline{unsigned long (*get_unmapped_area)(struct file *, unsigned long, unsigned long, unsigned long, unsigned long);}}：这个方法的目的是在进程的地址空间找一个合适的位置来映射在底层设备上的内存段中。这个任务通常由内存管理代码进行；这个方法存在为了使驱动能强制特殊设备可能有的任何的对齐请求。大部分驱动可以置这个方法为 NULL 。
+    \item \Colorbox{lightgrey}{\lstinline{int (*check_flags)(int)}}：这个方法允许模块检查传递给 \Colorbox{lightgrey}{\lstinline{fnctl(F_SETFL...)}} 调用的标志。
 \end{itemize}
 
 \chapter{块设备驱动程序}
