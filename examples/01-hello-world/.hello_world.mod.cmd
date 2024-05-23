@@ -1,0 +1,1 @@
+savedcmd_/home/zuoyuan/Linux-Device-Drivers-Tutorial/examples/01-hello-world/hello_world.mod := printf '%s\n'   hello_world.o | awk '!x[$$0]++ { print("/home/zuoyuan/Linux-Device-Drivers-Tutorial/examples/01-hello-world/"$$0) }' > /home/zuoyuan/Linux-Device-Drivers-Tutorial/examples/01-hello-world/hello_world.mod
