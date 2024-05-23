@@ -196,6 +196,128 @@ int main() {
 }
 \end{mycode}
 
+struct termios, tcgetattr(), tcsetattr(), ECHO, TCSAFLUSH 都来自 <termios.h> 头文件.
+
+ECHO 的功能是使你键入的每个键都打印到终端, 因此你可以看到你正在键入的内容. 这在规范模式下很有用, 但当我们试图在原始模式下仔细呈现用户界面时, 它确实会妨碍我们. 所以我们关掉它. 该程序与上一步中的程序执行相同的操作, 只是不打印你输入的内容. 如果你曾经不得不在终端输入密码, 例如在使用 sudo 时, 你可能会熟悉这种模式.
+
+程序退出后, 在 shell 里面, 你可能会发现终端仍然没有回显你键入的内容. 别担心, 它仍然会监听你输入的内容. 只需按 Ctrl-C 开始新的一行输入到你的 shell, 然后输入 reset 并按回车键. 在大多数情况下, 这会将你的终端重置为正常. 如果失败, 可以随时重新启动终端模拟器. 我们将在下一步中解决整个问题.
+
+termios 可以通过 tcgetattr() 将终端属性读入结构体 raw . 修改终端的属性之后, 可以使用 tcsetattr() 将修改后的属性应用到终端. TCSAFLUSH 参数指定何时应用更改: 在这种情况下, 它等待所有待处理的输出被写入终端, 并丢弃任何尚未读取的输入.
+
+c\_lflag 字段用于``本地标志位''. 其他标志位字段是 c\_iflag(输入标志位), c\_oflag(输出标志位)和 c\_cflag(控制标志位), 所有这些我们都必须修改以启用原始模式.
+
+ECHO 是一个 bitflag, 二进制表示是: 00000000000000000000000000001000. 我们对它使用按位非运算符(~)来获取 11111111111111111111111111110111. 然后我们将该值与标志位字段按位与, 这会强制标志位字段中的第四位变为 0, 并导致每隔一位保留当前值. 像这样翻转位在 C 语言中很常见.
+
+\section{退出时禁用原始模式}
+
+让我们善待用户, 并在我们的程序退出时恢复他们终端的原始属性. 我们使用变量 orig\_termios 来保存终端的原始属性, 并在程序退出时用于将其应用于终端.
+
+\begin{mycode}{第6步: kilo.c}
+#include <stdlib.h>
+#include <termios.h>
+#include <unistd.h>
+
+struct termios orig_termios;
+
+void disableRawMode() {
+  tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios);
+}
+
+void enableRawMode() {
+  tcgetattr(STDIN_FILENO, &orig_termios);
+  atexit(disableRawMode);
+
+  struct termios raw = orig_termios;
+  raw.c_lflag &= ~(ECHO);
+
+  tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+}
+
+int main() { ... }
+\end{mycode}
+
+\section{关闭规范模式}
+
+ICANON 标志位允许我们关闭规范模式. 这意味着我们最终将逐字节读取输入, 而不是逐行读取.
+
+\begin{mycode}{第7步: kilo.c}
+#include <stdlib.h>
+#include <termios.h>
+#include <unistd.h>
+
+struct termios orig_termios;
+
+void disableRawMode() { ... }
+
+void enableRawMode() {
+  tcgetattr(STDIN_FILENO, &orig_termios);
+  atexit(disableRawMode);
+  struct termios raw = orig_termios;
+  raw.c_lflag &= ~(ECHO | ICANON);
+  tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+}
+
+int main() { ... }
+\end{mycode}
+
+ICANON 来自 <termios.h>. 输入标志位(c\_iflag 中的标志位)通常以 I 开始, 例如 ICANON. 但是, ICANON 不是输入标志位, 它是 c\_lflag 字段中的``本地''标志位. 所以这很令人困惑.
+
+现在程序将在你按下 q 时立即退出.
+
+\section{显示按键}
+
+为了更好地了解原始模式下的输入是如何工作的, 让我们在 read() 时, 打印出输入的每个字节. 我们将打印每个字符的 ASCII 值, 以及它所代表的字符(如果它是可打印字符).
+
+\begin{mycode}{第8步: kilo.c}
+#include <ctype.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <termios.h>
+#include <unistd.h>
+
+struct termios orig_termios;
+
+void disableRawMode() { ... }
+
+void enableRawMode() { ... }
+
+int main() {
+  enableRawMode();
+
+  char c;
+  while (read(STDIN_FILENO, &c, 1) == 1 && c != 'q') {
+    if (iscntrl(c)) {
+      printf("%d\n", c);
+    } else {
+      printf("%d ('%c')\n", c, c);
+    }
+  }
+
+  return 0;
+}
+\end{mycode}
+
+iscntrl() 来自 <ctype.h>, printf() 来自 <stdio.h>.
+
+iscntrl() 测试一个字符是否是一个控制字符. 控制字符是我们不想打印到屏幕上的不可打印字符. ASCII 码 0-31 都是控制字符, 127 也是控制字符. ASCII 码 32-126 都是可打印的. (查看 ASCII 表以查看所有字符.)
+
+printf() 可以打印一个字节的多种表示形式. \%d 告诉它将字节格式化为十进制数(它的 ASCII 码), \%c 告诉它直接将字节作为一个字符输出.
+
+这是一个非常有用的程序. 它向我们展示了各种按键如何转换为我们读取的字节. 大多数普通按键直接转换为它们所代表的字符. 但是试着看看当你按下 \textbf{方向键} 或者 \textbf{退出键}, 或者 \textbf{Page Up}, 或者 \textbf{Page Down}, 或者 \textbf{Home}, 或者 \textbf{End} , 或者 \textbf{退格键} , \textbf{删除键}, 或者 \textbf{回车键} 时会发生什么. 尝试使用带有 Ctrl 的组合键, 例如 Ctrl-A, Ctrl-B 等组合键.
+
+你会注意到一些有趣的事情.
+
+\begin{itemize}
+\item 方向键, Page Up, Page Down, Home 和 End 会向终端输入 3 或 4 个字节: 27, '[', 然后是其他一两个字符. 这称为转义序列. 所有转义序列都以一个字节 27 开头. 按下 \textbf{退出键} 发送一个 27 字节作为输入.
+\item \textbf{退格键} 是字节 127. Delete 键是一个 4 字节的转义序列.
+\item \textbf{回车键} 是字节 10, 这是一个换行符, 也称为 '\\n'.
+\item Ctrl-A 是 1, Ctrl-B 是 2, Ctrl-C 是...哦, 那程序就终止了, 对吧. 但 Ctrl 组合键似乎确实将字母 A-Z 映射到了代码 1-26 .
+\end{itemize}
+
+顺便说一句, 如果你碰巧按下 Ctrl-S, 你可能会发现你的程序似乎被冻结了. 你所做的是你已经要求你的程序停止向你发送输出. 按 Ctrl-Q 告诉它继续向你发送输出.
+
+此外, 如果你按下 Ctrl-Z , 你的程序将暂停到后台. 运行 fg 命令将其带回前台.
+
 
 
 \end{document}
