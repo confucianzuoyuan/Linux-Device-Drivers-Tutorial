@@ -318,6 +318,100 @@ printf() 可以打印一个字节的多种表示形式. \%d 告诉它将字节�
 
 此外, 如果你按下 Ctrl-Z , 你的程序将暂停到后台. 运行 fg 命令将其带回前台.
 
+\section{关闭 Ctrl-C 和 Ctrl-Z 信号}
 
+默认情况下, Ctrl-C 会向当前进程发送 SIGINT 信号使其终止, 并向当前进程 Ctrl-Z 发送 SIGTSTP 信号使其挂起. 让我们关闭这两个信号的发送.
+
+\begin{mycode}{第9步: kilo.c}
+#include <ctype.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <termios.h>
+#include <unistd.h>
+
+struct termios orig_termios;
+
+void disableRawMode() { ... }
+
+void enableRawMode() {
+  tcgetattr(STDIN_FILENO, &orig_termios);
+  atexit(disableRawMode);
+  struct termios raw = orig_termios;
+  raw.c_lflag &= ~(ECHO | ICANON | ISIG);
+  tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+}
+
+int main() { ... }
+\end{mycode}
+
+ISIG 来自 <termios.h>. 就像 ICANON, 它虽然以 I 开头, 但不是输入标志位.
+
+现在按下 Ctrl-C 可以按字节读取 3, 按下 Ctrl-Z 也可以按字节读取 26.
+
+\section{禁用 Ctrl-S 和 Ctrl-Q}
+
+默认情况下, Ctrl-S 和 Ctrl-Q 用来控制软件流. Ctrl-S 会停止将数据传输到终端, 直到你按下 Ctrl-Q . 这起源于很久之前, 在那时你可能想要暂停数据传输以使打印机等设备赶上来. 让我们关闭该功能.
+
+\begin{mycode}{第10步: kilo.c}
+#include <ctype.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <termios.h>
+#include <unistd.h>
+
+struct termios orig_termios;
+
+void disableRawMode() { ... }
+
+void enableRawMode() {
+  tcgetattr(STDIN_FILENO, &orig_termios);
+  atexit(disableRawMode);
+
+  struct termios raw = orig_termios;
+  raw.c_iflag &= ~(IXON);
+  raw.c_lflag &= ~(ECHO | ICANON | ISIG);
+
+  tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+}
+
+int main() { ... }
+\end{mycode}
+
+IXON 来自 <termios.h>. I 这次真的代表``输入标志位''(和我们之前看到的其他标志位不同). XON 来自两个控制字符 Ctrl-S 和 Ctrl-Q 产生的名字: XOFF 负责暂停传输, XON 负责重启传输.
+
+现在 Ctrl-S 可以按字节读取 19, Ctrl-Q 也可以按字节读取 17.
+
+\section{禁用Ctrl-V}
+
+在一些系统上, 当你键入 Ctrl-V 时, 终端会等你输入另一个字符, 然后发送字符的字面量. 例如, 在我们禁用 Ctrl-C 前, 你可能可以按下 Ctrl-V 然后再按下 Ctrl-C 来输入字节 3. 我们可以使用 IEXTEN 标志位来关闭这个功能.
+
+\begin{mycode}{第11步: kilo.c}
+#include <ctype.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <termios.h>
+#include <unistd.h>
+
+struct termios orig_termios;
+
+void disableRawMode() { ... }
+
+void enableRawMode() {
+  tcgetattr(STDIN_FILENO, &orig_termios);
+  atexit(disableRawMode);
+
+  struct termios raw = orig_termios;
+  raw.c_iflag &= ~(IXON);
+  raw.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
+
+  tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+}
+
+int main() { ... }
+\end{mycode}
+
+IEXTEN 来自 <termios.h>. 这又是一个以 I 开头但是属于 c\_lflag 字段的标志位.
+
+Ctrl-V 现在可以被读取为字节 22 了. Ctrl-O 也可以被读取为字节 15 了.
 
 \end{document}
