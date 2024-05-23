@@ -1,1 +1,0 @@
-savedcmd_/home/zuoyuan/Linux-Device-Drivers-Tutorial/examples/01-hello-world/Module.symvers :=  scripts/mod/modpost -M  -a    -N  -o /home/zuoyuan/Linux-Device-Drivers-Tutorial/examples/01-hello-world/Module.symvers -n -T /home/zuoyuan/Linux-Device-Drivers-Tutorial/examples/01-hello-world/modules.order -i Module.symvers -e 
