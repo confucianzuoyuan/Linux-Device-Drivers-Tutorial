@@ -1,0 +1,201 @@
+\documentclass[lang=cn,newtx,10pt,scheme=chinese]{elegantbook}
+\usepackage{realboxes}
+\usepackage{forest}
+\usepackage{import}
+\usepackage{adjustbox}
+
+\title{使用C语言构建终端文本编辑器}
+\author{左元}
+
+\setcounter{tocdepth}{3}
+
+\cover{cover.pdf}
+
+% 本文档命令
+\usepackage{array}
+\newcommand{\ccr}[1]{\makecell{{\color{#1}\rule{1cm}{1cm}}}}
+
+% 修改标题页的橙色带
+\definecolor{customcolor}{RGB}{32,178,170}
+\colorlet{coverlinecolor}{customcolor}
+\usepackage{cprotect}
+
+\newtcolorbox{marker}[1][]{enhanced,
+  before skip=2mm,after skip=3mm,
+  boxrule=0.4pt,left=5mm,right=2mm,top=1mm,bottom=1mm,
+  colback=yellow!50,
+  colframe=yellow!20!black,
+  sharp corners,rounded corners=southeast,arc is angular,arc=3mm,
+  underlay={%
+    \path[fill=tcbcolback!80!black] ([yshift=3mm]interior.south east)--++(-0.4,-0.1)--++(0.1,-0.2);
+    \path[draw=tcbcolframe,shorten <=-0.05mm,shorten >=-0.05mm] ([yshift=3mm]interior.south east)--++(-0.4,-0.1)--++(0.1,-0.2);
+    \path[fill=yellow!50!black,draw=none] (interior.south west) rectangle node[white]{\Huge\bfseries !} ([xshift=4mm]interior.north west);
+    },
+  drop fuzzy shadow,#1}
+
+\tcbuselibrary{listings, skins, breakable}
+\usepackage[T1]{fontenc}
+\usepackage[ttdefault=true]{AnonymousPro}
+\definecolor{pblue}{rgb}{0.13,0.13,1}
+\definecolor{pgreen}{rgb}{0,0.5,0}
+
+\newtcblisting[auto counter, number within=chapter]{mycode}[1]{
+    breakable,
+    enhanced,
+    attach boxed title to top right={yshift=-\tcboxedtitleheight},
+    boxed title style={
+        size=small,colback=gray!50,
+        colframe=gray!50,
+        sharp corners=downhill,
+        arc=.5cm,
+        top=1mm,bottom=1mm,left=1mm,right=1mm
+    },
+    fonttitle=\color{black}\itshape\ttfamily,
+    colframe=gray!20,
+    top=\tcboxedtitleheight,
+    bottom=\tcboxedtitleheight,
+    sharp corners=downhill,
+    arc=.5cm,
+    title={#1},
+    listing only,
+    listing options={
+        escapeinside={(*@}{@*)},
+        language=c,
+        basicstyle=\fontfamily{AnonymousPro}\selectfont,
+        keywordstyle=\bfseries\color{pblue},
+        stringstyle=\bfseries\itshape\color{green!40!black},
+        commentstyle=\bfseries\itshape\color{black!60},
+        % Line numbers
+        xleftmargin={0.75cm},
+        numbers=left,
+        stepnumber=1,
+        firstnumber=1,
+        numberfirstline=true,
+        showspaces=false,
+        showtabs=false,
+        breaklines=true,
+        showstringspaces=false,
+        tabsize=1,
+        emph={
+            gpio_config_t, for, uint8_t, TextView, Toast, Button, EditText, ImageView, Typeface, Intent, WebView, WebSettings, SwipeRefreshLayout, RelativeLayout, Animation, AlertDialog, SharedPreferences, Editor, ToggleButton, CardView, LinearLayout, gradient, shape,
+        },
+        emphstyle={\bfseries\color{pblue}},
+        frame=l
+    }
+}
+
+\begin{document}
+
+\maketitle
+\frontmatter
+
+\tableofcontents
+
+\mainmatter
+
+\chapter{设置}
+
+\begin{mycode}{第1步: kilo.c}
+int main() {
+  return 0;
+}
+\end{mycode}
+
+编写 Makefile 文件。
+
+\begin{mycode}{第2步: Makefile}
+kilo: kilo.c
+    $(CC) kilo.c -o kilo -Wall -Wextra -pedantic -std=c99
+\end{mycode}
+
+Makefile 中一定要使用制表符. 命令中的参数:
+
+\begin{itemize}
+    \item \Colorbox{lightgrey}{\lstinline{$(CC)}} 是一个 make 会展开的变量, 默认是 cc.
+    \item \Colorbox{lightgrey}{\lstinline{-Wall}} 代表``所有警告'', 并让编译器在看到程序中的代码时向你发出警告, 这些代码在技术上可能没有错误, 但被认为是 C 语言的错误或有问题的用法, 例如在初始化变量之前使用变量.
+    \item \Colorbox{lightgrey}{\lstinline{-Wextra}} 和 \Colorbox{lightgrey}{\lstinline{-pedantic}} 会打开更多警告. 对于本教程中的每个步骤, 如果你的程序能够编译通过, 除了在某些情况下出现``未使用的变量''警告外, 它不应产生任何警告. 如果你收到任何其他警告, 请检查以确保你的代码与该步骤中的代码完全匹配.
+    \item \Colorbox{lightgrey}{\lstinline{-std=c99}} 指定我们正在使用的 C 语言标准的确切版本, 即 C99. C99 允许我们在函数内的任何地方声明变量, 而 ANSI C 要求所有变量都在函数或块的顶部声明.
+\end{itemize}
+
+使用 make 命令来编译程序. 运行 \Colorbox{lightgrey}{\lstinline{./kilo}} . 然后使用命令 \Colorbox{lightgrey}{\lstinline{echo $?}} 查看程序的返回值.
+
+\chapter{进入原始模式}
+
+\begin{marker}
+原始模式: raw mode
+\end{marker}
+
+接下来读取用户的按键操作.
+
+\begin{mycode}{第3步: kilo.c}
+#include <unistd.h>
+
+int main() {
+  char c;
+  while (read(STDIN_FILENO, &c, 1) == 1);
+
+  return 0;
+}
+\end{mycode}
+
+\Colorbox{lightgrey}{\lstinline{read()}} 和 \Colorbox{lightgrey}{\lstinline{STDIN_FILENO}} 来自 <unistd.h> . \Colorbox{lightgrey}{\lstinline{read()}} 从标准输入中读取 1 个字节到变量 c 中, 在 while 循环中一直读取, 直到没有可以读取的字节. read() 返回读取的字节数, 并在到达文件末尾时返回 0.
+
+当运行 \Colorbox{lightgrey}{\lstinline{./kilo}} 时, 终端会连接到标准输入, 因此键盘的输入会被读取到变量 c 中. 但是, 默认情况下终端以 \textbf{规范模式}\footnote{canonical mode} 启动. 在规范模式下, 键盘输入仅在用户按下 \textbf{回车键} 时发送到我们的程序. 这对许多程序都很有用: 它允许用户输入一行文本, 这样可以使用 \textbf{退格键} 来修复错误, 直到文本完全按照想要的方式输入, 最后按 \textbf{回车键} 将其发送到程序. 但它不适用于具有更复杂用户界面的程序, 如文本编辑器. 我们希望在每个按键输入时都对其进行处理, 以便我们可以立即做出响应.
+
+我们想要的是 \textbf{原始模式} . 不幸的是, 没有简单的开关可以将终端设置为原始模式. 原始模式是通过关闭终端中的许多标志位来实现的, 我们将在本章的过程中逐渐做到这一点.
+
+要退出上述程序, 请按 Ctrl-D 以告知 read() 它已到达文件末尾. 或者我们始终可以按 Ctrl-C 以发出立即终止进程的信号.
+
+\section{按下q键退出}
+
+为了演示规范模式是如何工作的, 我们将让程序在读取到用户的 q 按键操作时退出.
+
+\begin{mycode}{第4步: kilo.c}
+#include <unistd.h>
+
+int main() {
+  char c;
+  while (read(STDIN_FILENO, &c, 1) == 1 && c != 'q');
+
+  return 0;
+}
+\end{mycode}
+
+要退出程序, 必须键入一行包含 q 的文本, 然后按回车键. 程序将一次一个字符地快速读取文本行, 直到读取到 q , 此时 while 循环将停止且程序将退出. q 之后的任何字符都将在输入队列中保持未读状态, 你可能会在程序退出后看到该输入被送入你的 shell .
+
+\section{关闭回显(echo)}
+
+我们可以通过以下方式设置终端的属性.
+
+\begin{enumerate}
+    \item 使用 tcgetattr() 将当前属性读入结构体 raw.
+    \item 手动修改结构体 raw .
+    \item 将修改后的结构体 raw 传递给 tcsetattr() 以写回新的终端属性. 让我们尝试以这种方式关闭 ECHO 功能.
+\end{enumerate}
+
+\begin{mycode}{第5步: kilo.c}
+#include <termios.h>
+#include <unistd.h>
+
+void enableRawMode() {
+  struct termios raw;
+
+  tcgetattr(STDIN_FILENO, &raw);
+
+  raw.c_lflag &= ~(ECHO);
+
+  tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+}
+
+int main() {
+  enableRawMode();
+
+  char c;
+  while (read(STDIN_FILENO, &c, 1) == 1 && c != 'q');
+  return 0;
+}
+\end{mycode}
+
+
+
+\end{document}

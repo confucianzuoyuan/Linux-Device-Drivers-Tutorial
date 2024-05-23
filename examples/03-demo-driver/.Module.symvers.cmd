@@ -1,0 +1,1 @@
+cmd_/home/zuoyuan/Linux-Device-Drivers-Tutorial/examples/03-demo-driver/Module.symvers :=  sed 's/ko$$/o/'  /home/zuoyuan/Linux-Device-Drivers-Tutorial/examples/03-demo-driver/modules.order | scripts/mod/modpost      -o /home/zuoyuan/Linux-Device-Drivers-Tutorial/examples/03-demo-driver/Module.symvers -n -e -i Module.symvers -T - 
