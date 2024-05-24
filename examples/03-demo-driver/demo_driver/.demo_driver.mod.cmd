@@ -1,1 +1,0 @@
-cmd_/home/zuoyuan/Linux-Device-Drivers-Tutorial/examples/03-demo-driver/demo_driver/demo_driver.mod := printf '%s\n'   demo_driver.o | awk '!x[$$0]++ { print("/home/zuoyuan/Linux-Device-Drivers-Tutorial/examples/03-demo-driver/demo_driver/"$$0) }' > /home/zuoyuan/Linux-Device-Drivers-Tutorial/examples/03-demo-driver/demo_driver/demo_driver.mod

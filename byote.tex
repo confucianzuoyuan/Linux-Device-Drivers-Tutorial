@@ -1,4 +1,5 @@
 \documentclass[lang=cn,newtx,10pt,scheme=chinese]{elegantbook}
+\usepackage{newtxtext,newtxmath}
 \usepackage{realboxes}
 \usepackage{forest}
 \usepackage{import}
@@ -413,5 +414,40 @@ int main() { ... }
 IEXTEN 来自 <termios.h>. 这又是一个以 I 开头但是属于 c\_lflag 字段的标志位.
 
 Ctrl-V 现在可以被读取为字节 22 了. Ctrl-O 也可以被读取为字节 15 了.
+
+\section{修复Ctrl-M}
+
+如果你现在运行程序, 并在按住 Ctrl 的同时按一遍整个字母表, 你应该会看到除了 M 之外的所有字母. Ctrl-M 很奇怪: 当我们期望它被读入为 13 时, 它被读入为 10 . 因为它是字母表中的第 13 个字母, 并且 Ctrl-J 已经产生了一个 10 . 什么按键还产生 10? 回车键也会产生 10.
+
+事实证明, 终端正在帮助将用户输入的任何回车符(13, \\r)转换为换行符(10, \\n). 让我们关闭这个功能.
+
+\begin{mycode}{第12步: kilo.c}
+#include <ctype.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <termios.h>
+#include <unistd.h>
+
+struct termios orig_termios;
+
+void disableRawMode() { ... }
+
+void enableRawMode() {
+  tcgetattr(STDIN_FILENO, &orig_termios);
+  atexit(disableRawMode);
+
+  struct termios raw = orig_termios;
+  raw.c_iflag &= ~(ICRNL | IXON);
+  raw.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
+
+  tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+}
+
+int main() { ... }
+\end{mycode}
+
+ICRNL 来自 <termios.h>. I 代表``输入标志'', CR 代表``回车'', NL 代表``换行''.
+
+现在 Ctrl-M 读入为字节 13(回车), 回车键也读入为 13.
 
 \end{document}

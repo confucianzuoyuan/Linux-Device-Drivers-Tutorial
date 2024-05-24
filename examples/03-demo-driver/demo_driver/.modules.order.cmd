@@ -1,1 +1,0 @@
-cmd_/home/zuoyuan/Linux-Device-Drivers-Tutorial/examples/03-demo-driver/demo_driver/modules.order := {   echo /home/zuoyuan/Linux-Device-Drivers-Tutorial/examples/03-demo-driver/demo_driver/demo_driver.ko; :; } > /home/zuoyuan/Linux-Device-Drivers-Tutorial/examples/03-demo-driver/demo_driver/modules.order

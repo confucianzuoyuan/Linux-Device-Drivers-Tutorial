@@ -1,1 +1,1 @@
-obj := demo_driver/
+obj-m := demo_driver.o
