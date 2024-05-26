@@ -1,0 +1,1 @@
+savedcmd_/home/zuoyuan/Linux-Device-Drivers-Tutorial/examples/04-scull-driver/modules.order := {   echo /home/zuoyuan/Linux-Device-Drivers-Tutorial/examples/04-scull-driver/scull.o; :; } > /home/zuoyuan/Linux-Device-Drivers-Tutorial/examples/04-scull-driver/modules.order

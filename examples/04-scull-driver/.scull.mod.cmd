@@ -1,0 +1,1 @@
+savedcmd_/home/zuoyuan/Linux-Device-Drivers-Tutorial/examples/04-scull-driver/scull.mod := printf '%s\n'   main.o fops.o | awk '!x[$$0]++ { print("/home/zuoyuan/Linux-Device-Drivers-Tutorial/examples/04-scull-driver/"$$0) }' > /home/zuoyuan/Linux-Device-Drivers-Tutorial/examples/04-scull-driver/scull.mod

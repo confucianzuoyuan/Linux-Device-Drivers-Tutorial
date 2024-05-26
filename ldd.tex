@@ -1833,42 +1833,42 @@ platform\_get\_irq()调用将返回中断号,devm\_request\_irq()可以用这个
 
 interrupt-controller属性用于将设备声明为中断控制器。\#interruptcells属性定义必须使用多少个单元格来定义单个中断线。
 
-\section{平台驱动程序和DT}
+% \section{平台驱动程序和DT}
 
-平台驱动程序也使用DT。也就是说,这是现在推荐的处理平台设备的方法,不再需要使用开发板文件,甚至不需要在设备的属性更改时重新编译内核。可否记得,在第5章讨论了OF匹配样式,这是一种基于DT的匹配机制。下面介绍它的工作原理。
+% 平台驱动程序也使用DT。也就是说,这是现在推荐的处理平台设备的方法,不再需要使用开发板文件,甚至不需要在设备的属性更改时重新编译内核。可否记得,在第5章讨论了OF匹配样式,这是一种基于DT的匹配机制。下面介绍它的工作原理。
 
-“OF匹配风格”是平台核心执行的第一种匹配机制,以匹配设备及其驱动程序。它使用设备树的compatible属性来匹配of\_match\_table中的设备项,设备项是struct driver子结构的一个字段。每个设备节点都有compatible属性,它是字符串或字符串列表。任何驱动程序只要声明compatible属性中列出的字符串之一,就将触发匹配,并看到其probe函数执行。
+% “OF匹配风格”是平台核心执行的第一种匹配机制,以匹配设备及其驱动程序。它使用设备树的compatible属性来匹配of\_match\_table中的设备项,设备项是struct driver子结构的一个字段。每个设备节点都有compatible属性,它是字符串或字符串列表。任何驱动程序只要声明compatible属性中列出的字符串之一,就将触发匹配,并看到其probe函数执行。
 
-DT匹配项在内核中被描述为struct of\_device\_id结构的实例,该结构定义在linux/mod\_devicetable.h中,如下所示:
+% DT匹配项在内核中被描述为struct of\_device\_id结构的实例,该结构定义在linux/mod\_devicetable.h中,如下所示:
 
-\begin{mycode}{example}
-    // 我们只对结构的最后两个元素感兴趣
-    struct of_device_id {
-        [...]
-        char compatible[128];
-        const void *data;
-    }
-\end{mycode}
+% \begin{mycode}{example}
+%     // 我们只对结构的最后两个元素感兴趣
+%     struct of_device_id {
+%         [...]
+%         char compatible[128];
+%         const void *data;
+%     }
+% \end{mycode}
 
-该结构中每个元素的含义如下。
+% 该结构中每个元素的含义如下。
 
-\begin{itemize}
-\item char compatible [128]:这是用来匹配DT中设备节点兼容属性的字符串。它们必须完全相同才算匹配。
-\item const void * data:这可以指向任何结构,这个结构可以用作每个设备类型的配置数据。
-\end{itemize}
+% \begin{itemize}
+% \item char compatible [128]:这是用来匹配DT中设备节点兼容属性的字符串。它们必须完全相同才算匹配。
+% \item const void * data:这可以指向任何结构,这个结构可以用作每个设备类型的配置数据。
+% \end{itemize}
 
-由于of\_match\_table是指针,因此可以传递struct of\_device\_id数组,使驱动程序兼容多个设备:
+% 由于of\_match\_table是指针,因此可以传递struct of\_device\_id数组,使驱动程序兼容多个设备:
 
-\begin{mycode}{example}
-static const struct of_device_id imx_uart_dt_ids[] = {
-    { .compatible = "fsl,imx6q-uart", },
-    { .compatible = "fsl,imx1-uart", },
-    { .compatible = "fsl,imx21-uart", },
-    { /* sentinel */ }
-};
-\end{mycode}
+% \begin{mycode}{example}
+% static const struct of_device_id imx_uart_dt_ids[] = {
+%     { .compatible = "fsl,imx6q-uart", },
+%     { .compatible = "fsl,imx1-uart", },
+%     { .compatible = "fsl,imx21-uart", },
+%     { /* sentinel */ }
+% };
+% \end{mycode}
 
-一旦在驱动程序的子结构中填充了ID数组,就必须把它传递到平台驱动程序的of\_match\_table字段:
+% 一旦在驱动程序的子结构中填充了ID数组,就必须把它传递到平台驱动程序的of\_match\_table字段:
 
 \chapter{字符设备驱动程序}
 
@@ -2038,7 +2038,7 @@ chmod $mode /dev/${device}[0-3]
 下面是 scull.c 中用来获取主设备号的代码：
 
 \begin{mycode}{获取主设备号}
-if (sucll_major) {
+if (scull_major) {
     dev = MKDEV(scull_major, scull_minor);
     result = register_chrdev_region(dev, scull_nr_devs, "scull");
 } else {
@@ -2310,7 +2310,7 @@ scull 的基本形式没有硬件去关闭, 因此需要的代码是最少的:
 
 \section{scull 的内存使用}
 
-在介绍读写操作前, 我们最好看看如何以及为什么 scull 进行内存分配. "如何"是需要全面理解代码, "为什么"演示了驱动编写者需要做的选择, 尽管 scull 明确地不是典型设备.
+在介绍读写操作前, 我们最好看看如何以及为什么 scull 进行内存分配. ``如何''是需要全面理解代码, ``为什么''演示了驱动编写者需要做的选择, 尽管 scull 明确地不是典型设备.
 
 本节只处理 scull 中的内存分配策略, 不展示给你编写真正驱动需要的硬件管理技能.
 
@@ -2346,7 +2346,7 @@ struct scull_qset {
 };
 \end{mycode}
 
-下一个代码片段展示了实际中 struct scull\_dev 和 struct scull\_qset 是如何被用来持有数据的. sucll\_trim 函数负责释放整个数据区, 由 scull\_open 在文件为写而打开时调用. 它简单地遍历列表并且释放它发现的任何量子和量子集.
+下一个代码片段展示了实际中 struct scull\_dev 和 struct scull\_qset 是如何被用来持有数据的. scull\_trim 函数负责释放整个数据区, 由 scull\_open 在文件为写而打开时调用. 它简单地遍历列表并且释放它发现的任何量子和量子集.
 
 \begin{mycode}{example}
 int scull_trim(struct scull_dev *dev) {
@@ -2430,7 +2430,7 @@ read 的返回值由调用的应用程序解释:
 \item 一个负值表示有一个错误. 这个值指出了什么错误, 根据 <linux/errno.h>. 出错的典型返回值包括 -EINTR(被打断的系统调用) 或者 -EFAULT(坏地址).
 \end{itemize}
 
-前面列表中漏掉的是这种情况"没有数据, 但是可能后来到达". 在这种情况下, read 系统调用应当阻塞.
+前面列表中漏掉的是这种情况``没有数据, 但是可能后来到达''. 在这种情况下, read 系统调用应当阻塞.
 
 scull 代码利用了这些规则. 特别地, 它利用了部分读规则. 每个 scull\_read 调用只处理单个数据量子, 不实现一个循环来收集所有的数据; 这使得代码更短更易读. 如果读程序确实需要更多数据, 它重新调用. 如果标准 I/O 库(例如, fread)用来读取设备, 应用程序甚至不会注意到数据传送的量子化.
 
